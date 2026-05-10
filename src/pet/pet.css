@@ -12,31 +12,25 @@
 }
 
 html, body {
-  margin: 0;
-  padding: 0;
-  width: 100vw;
   height: 100vh;
+  margin: 0;
   overflow: hidden;
-  
-  /* 核心：开启弹性布局并居中 */
-  display: flex;
-  justify-content: center; /* 水平居中 */
-  align-items: center;     /* 垂直居中 */
-  
-  /* 保持原有属性 */
+  position: relative;
   background-color: transparent !important;
-  pointer-events: none; /* 确保窗口透明区域不拦截点击 */
+  pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
 }
 
 #pet-container {
-  position: relative;
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%) scale(0.6);
+  transform-origin: bottom center;
   width: 192px;
   height: 208px;
-  pointer-events: auto !important; 
-  transform: scale(0.6);
-  transform-origin: center; 
+  pointer-events: auto !important;
 }
 
 #pet-sprite {
@@ -77,13 +71,12 @@ html, body {
 }
 
 #pet-container.is-lifting {
-  transform: scale(0.6) scaleY(1.05) scaleX(0.95) !important;
+  transform: translateX(-50%) scale(0.6) scaleY(1.05) scaleX(0.95) !important;
 }
 
 #pet-container.is-dropping {
-  transform: scale(0.6) scaleY(0.9) scaleX(1.1) !important;
+  transform: translateX(-50%) scale(0.6) scaleY(0.9) scaleX(1.1) !important;
 }
-
 /* ── Speech Bubble ── */
 
 #pet-speech-bubble {
@@ -92,13 +85,13 @@ html, body {
   left: 50%;
   transform: translateX(-50%) translateY(10px);
   width: max-content;
-  max-width: 180px;
-  padding: 10px 15px;
+  max-width: 250px;
+  padding: 12px 16px;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
   color: #3a3a3a;
-  font-size: 14px;
+  font-size: 18px;
   font-weight: bold;
   line-height: 1.4;
   border-radius: 12px;
@@ -106,8 +99,9 @@ html, body {
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.3s ease, transform 0.3s ease;
-  z-index: 200;
-  white-space: normal;
+  z-index: 10001;
+  white-space: pre-wrap;
+  word-break: break-word;
   word-wrap: break-word;
   text-align: center;
 }
@@ -242,4 +236,212 @@ html, body {
   font-weight: 500;
   color: rgba(255, 255, 255, 0.85);
   user-select: none;
+}
+
+/* ── API Settings Panel (frosted glass) ── */
+
+#api-settings-panel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90%;
+  max-width: 240px;
+  box-sizing: border-box;
+  background: rgba(40, 40, 40, 0.9);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+  padding: 16px;
+  color: #eeeeee;
+  font-family: system-ui, -apple-system, sans-serif;
+  z-index: 9999;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+}
+
+.api-settings-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 6px;
+  color: #ffffff;
+  text-align: center;
+  user-select: none;
+}
+
+.api-settings-field {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 12px;
+  gap: 6px;
+}
+
+.api-settings-field label {
+  font-size: 12px;
+  color: #cccccc;
+  user-select: none;
+}
+
+.api-settings-field input {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  border-radius: 8px;
+  padding: 8px 10px;
+  outline: none;
+  font-size: 12px;
+  transition: border-color 0.2s;
+}
+
+.api-settings-field input:focus {
+  border-color: #3b82f6;
+}
+
+.api-settings-field input::placeholder {
+  color: rgba(255, 255, 255, 0.25);
+}
+
+.api-settings-actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 16px;
+}
+
+.api-settings-actions button {
+  flex: 1;
+  margin: 0 4px;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 0;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.btn-cancel {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  color: #cccccc;
+}
+
+.btn-cancel:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.btn-save {
+  background: #3b82f6;
+  color: white;
+  transition: all 0.3s ease;
+}
+
+.btn-save:hover {
+  background: #2563eb;
+}
+
+.btn-save.success {
+  background-color: #10b981 !important;
+  color: white !important;
+}
+
+.btn-save.error {
+  background-color: #ef4444 !important;
+  color: white !important;
+}
+
+/* ── Custom Persona Panel ── */
+
+#custom-persona-panel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90%;
+  max-width: 260px;
+  box-sizing: border-box;
+  background: rgba(40, 40, 40, 0.9);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+  padding: 16px;
+  color: #eeeeee;
+  font-family: system-ui, sans-serif;
+  z-index: 9999;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+}
+
+#custom-persona-panel textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  border-radius: 8px;
+  padding: 8px 10px;
+  outline: none;
+  font-size: 12px;
+  resize: none;
+  font-family: system-ui, sans-serif;
+}
+
+#custom-persona-panel textarea:focus {
+  border-color: #3b82f6;
+}
+
+#custom-persona-panel textarea::placeholder {
+  color: rgba(255, 255, 255, 0.25);
+}
+
+/* ── GitHub Settings Panel ── */
+
+#github-settings-panel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90%;
+  max-width: 200px;
+  box-sizing: border-box;
+  background: rgba(40, 40, 40, 0.9);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+  padding: 14px;
+  color: #eeeeee;
+  font-family: system-ui, sans-serif;
+  z-index: 9999;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+}
+
+#github-settings-panel .api-settings-actions {
+  gap: 6px;
+}
+
+#github-settings-panel .api-settings-actions button {
+  padding: 6px 0;
+  font-size: 11px;
+}
+
+.btn-test {
+  background: #4b5563;
+  color: white;
+}
+
+.btn-test:hover {
+  background: #374151;
+}
+
+#github-settings-panel #github-username-input.success-status {
+  border-color: #10b981 !important;
+  background: rgba(16, 185, 129, 0.2) !important;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
 }

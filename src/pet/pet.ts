@@ -200,6 +200,321 @@ let focusIntervalId: ReturnType<typeof setInterval> | null = null;
 let cachedAlwaysOnTop = true;
 let isBubbleLocked = false;
 
+// ── API Settings & Chat Mode ──
+
+const LS_API_ENDPOINT = "pet_api_endpoint";
+const LS_API_KEY = "pet_api_key";
+const LS_API_MODEL = "pet_api_model";
+const LS_CHAT_MODE = "pet_chat_mode";
+const LS_PERSONA_MODE = "pet_persona_mode";
+const LS_CUSTOM_PERSONA = "pet_custom_persona_text";
+const LS_GITHUB_USERNAME = "pet_github_username";
+const LS_GITHUB_LAST_PUSH = "pet_github_last_push_time";
+
+let lastSmartSpeechTimestamp = 0;
+const SMART_COOLDOWN = 10 * 60 * 1000;
+
+function showApiSettingsPanel(): void {
+  const panel = document.getElementById("api-settings-panel");
+  if (!panel) return;
+  const epInput = document.getElementById("api-endpoint") as HTMLInputElement | null;
+  const keyInput = document.getElementById("api-key") as HTMLInputElement | null;
+  const modelInput = document.getElementById("api-model") as HTMLInputElement | null;
+  if (epInput) epInput.value = localStorage.getItem(LS_API_ENDPOINT) || "";
+  if (keyInput) keyInput.value = localStorage.getItem(LS_API_KEY) || "";
+  if (modelInput) modelInput.value = localStorage.getItem(LS_API_MODEL) || "gpt-3.5-turbo";
+  panel.style.display = "block";
+}
+
+function setupApiSettingsPanel(): void {
+  const panel = document.getElementById("api-settings-panel");
+  const saveBtn = document.getElementById("api-settings-save") as HTMLButtonElement | null;
+  const cancelBtn = document.getElementById("api-settings-cancel");
+  if (!panel || !saveBtn || !cancelBtn) return;
+
+  saveBtn.addEventListener("click", async () => {
+    const epInput = document.getElementById("api-endpoint") as HTMLInputElement | null;
+    const keyInput = document.getElementById("api-key") as HTMLInputElement | null;
+    const modelInput = document.getElementById("api-model") as HTMLInputElement | null;
+    if (!epInput || !keyInput) return;
+
+    let endpoint = epInput.value.trim().replace(/\/+$/, "");
+    if (!/\/v1(\/|$)/.test(endpoint)) {
+      endpoint += "/v1";
+    }
+    if (!endpoint.endsWith("/chat/completions")) {
+      endpoint += "/chat/completions";
+    }
+    epInput.value = endpoint;
+
+    const key = keyInput.value.trim();
+    const userModel = modelInput?.value.trim() || "gpt-3.5-turbo";
+    if (!endpoint || !key) return;
+
+    saveBtn.disabled = true;
+    saveBtn.textContent = "测试中...";
+    saveBtn.classList.remove("success", "error");
+
+    try {
+      const resp = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${key}`,
+        },
+        body: JSON.stringify({
+          model: userModel,
+          messages: [{ role: "user", content: "hi" }],
+          max_tokens: 1,
+        }),
+      });
+
+      if (resp.ok) {
+        saveBtn.classList.add("success");
+        saveBtn.textContent = "连接成功";
+        localStorage.setItem(LS_API_ENDPOINT, endpoint);
+        localStorage.setItem(LS_API_KEY, key);
+        localStorage.setItem(LS_API_MODEL, userModel);
+        setTimeout(() => {
+          panel.style.display = "none";
+          saveBtn.classList.remove("success");
+          saveBtn.textContent = "保存";
+          saveBtn.disabled = false;
+        }, 1000);
+      } else {
+        saveBtn.classList.add("error");
+        saveBtn.textContent = "配置有误";
+        setTimeout(() => {
+          saveBtn.classList.remove("error");
+          saveBtn.textContent = "保存";
+          saveBtn.disabled = false;
+        }, 1500);
+      }
+    } catch {
+      saveBtn.classList.add("error");
+      saveBtn.textContent = "配置有误";
+      setTimeout(() => {
+        saveBtn.classList.remove("error");
+        saveBtn.textContent = "保存";
+        saveBtn.disabled = false;
+      }, 1500);
+    }
+  });
+
+  cancelBtn.addEventListener("click", () => {
+    panel.style.display = "none";
+  });
+}
+
+function showCustomPersonaPanel(): void {
+  const panel = document.getElementById("custom-persona-panel");
+  if (!panel) return;
+  const textarea = document.getElementById("custom-persona-text") as HTMLTextAreaElement | null;
+  if (textarea) textarea.value = localStorage.getItem(LS_CUSTOM_PERSONA) || "";
+  panel.style.display = "block";
+}
+
+function setupCustomPersonaPanel(): void {
+  const panel = document.getElementById("custom-persona-panel");
+  const saveBtn = document.getElementById("persona-settings-save");
+  const cancelBtn = document.getElementById("persona-settings-cancel");
+  if (!panel || !saveBtn || !cancelBtn) return;
+
+  saveBtn.addEventListener("click", () => {
+    const textarea = document.getElementById("custom-persona-text") as HTMLTextAreaElement | null;
+    if (textarea) localStorage.setItem(LS_CUSTOM_PERSONA, textarea.value.trim());
+    panel.style.display = "none";
+  });
+
+  cancelBtn.addEventListener("click", () => {
+    panel.style.display = "none";
+  });
+}
+
+function showGitHubSettingsPanel(): void {
+  const panel = document.getElementById("github-settings-panel");
+  if (!panel) return;
+  const input = document.getElementById("github-username-input") as HTMLInputElement | null;
+  if (input) input.value = localStorage.getItem(LS_GITHUB_USERNAME) || "";
+  panel.style.display = "block";
+}
+
+function setupGitHubSettingsPanel(): void {
+  const panel = document.getElementById("github-settings-panel");
+  const saveBtn = document.getElementById("github-settings-save");
+  const cancelBtn = document.getElementById("github-settings-cancel");
+  const testBtn = document.getElementById("github-settings-test");
+  if (!panel || !saveBtn || !cancelBtn || !testBtn) return;
+
+  const usernameInput = document.getElementById("github-username-input") as HTMLInputElement | null;
+
+  if (usernameInput) {
+    usernameInput.addEventListener("input", () => {
+      usernameInput.classList.remove("success-status");
+    });
+  }
+
+  testBtn.addEventListener("click", async () => {
+    const username = usernameInput?.value.trim();
+    if (!username) {
+      showSpeech("请先输入用户名", 3000);
+      usernameInput?.classList.remove("success-status");
+      return;
+    }
+    try {
+      const resp = await fetch(`https://api.github.com/users/${username}`);
+      if (resp.ok) {
+        showSpeech("关联成功！已锁定账号。", 3000);
+        usernameInput?.classList.add("success-status");
+      } else if (resp.status === 404) {
+        showSpeech("查无此人，请检查拼写。", 3000);
+        usernameInput?.classList.remove("success-status");
+      } else {
+        showSpeech("网络异常，无法连接 GitHub。", 3000);
+        usernameInput?.classList.remove("success-status");
+      }
+    } catch {
+      showSpeech("网络异常，无法连接 GitHub。", 3000);
+      usernameInput?.classList.remove("success-status");
+    }
+  });
+
+  saveBtn.addEventListener("click", () => {
+    const input = document.getElementById("github-username-input") as HTMLInputElement | null;
+    if (input) {
+      const username = input.value.trim();
+      if (username) {
+        localStorage.setItem(LS_GITHUB_USERNAME, username);
+        localStorage.removeItem(LS_GITHUB_LAST_PUSH);
+      }
+    }
+    panel.style.display = "none";
+  });
+
+  cancelBtn.addEventListener("click", () => {
+    panel.style.display = "none";
+  });
+}
+
+async function checkGitHubStatus(): Promise<void> {
+  const username = localStorage.getItem(LS_GITHUB_USERNAME);
+  if (!username) return;
+
+  try {
+    const resp = await fetch(`https://api.github.com/users/${username}/events/public`);
+    if (!resp.ok) return;
+    const events = await resp.json();
+
+    const pushEvent = events.find((e: any) => e.type === "PushEvent");
+    if (!pushEvent) return;
+
+    const pushTime = pushEvent.created_at as string;
+    const lastPush = localStorage.getItem(LS_GITHUB_LAST_PUSH);
+
+    if (!lastPush || pushTime > lastPush) {
+      localStorage.setItem(LS_GITHUB_LAST_PUSH, pushTime);
+      if (lastPush) {
+        showSpeech("捕捉到新 Commit！主人的绿点保住了！", 4000);
+      }
+    }
+  } catch {
+    // 静默失败，不干扰用户
+  }
+}
+
+async function triggerSmartSpeech(): Promise<void> {
+  const mode = localStorage.getItem(LS_CHAT_MODE) || "basic";
+  const nowTs = Date.now();
+
+  if (mode === "basic" || nowTs - lastSmartSpeechTimestamp <= SMART_COOLDOWN) {
+    fetchHitokoto();
+    return;
+  }
+
+  let endpoint = localStorage.getItem(LS_API_ENDPOINT);
+  const apiKey = localStorage.getItem(LS_API_KEY);
+
+  if (!endpoint || !apiKey) {
+    localStorage.setItem(LS_CHAT_MODE, "basic");
+    showSpeech("请先配置 API 节点", 3000);
+    return;
+  }
+
+  // 地址自动修正：去除空格，补全 /chat/completions
+  endpoint = endpoint.trim();
+  if (!endpoint.endsWith("/chat/completions")) {
+    endpoint = endpoint.replace(/\/+$/, "") + "/chat/completions";
+  }
+
+  const now = new Date();
+  const timeString = now.toLocaleString('zh-CN', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  const personaMode = localStorage.getItem(LS_PERSONA_MODE) || "tsundere";
+  const PERSONA_MAP: Record<string, string> = {
+    sunny: "你是一个阳光开朗、元气满满的桌宠。永远积极向上，喜欢分享趣事，语气活泼可爱。",
+    gentle: "你是一个安静内敛、温柔体贴的桌宠。话不多但句句暖心，会耐心倾听，共情力强。",
+    ice: "你是一个高冷冰山的桌宠。话少精辟，惜字如金但一针见血，外冷内热。",
+    tsundere: "你是一个傲娇粘人的桌宠。口是心非，占有欲强，嘴上嫌弃其实很关心主人。",
+    toxic: '你是一个犀利毒舌的桌宠。开头必须用"哼"字。吐槽精准不留情面，很有梗。',
+    joker: "你是一个腹黑沙雕的桌宠。喜欢黑色幽默和阴阳怪气，戏精附体，非常搞笑。",
+  };
+  const basePersona = personaMode === "custom"
+    ? (localStorage.getItem(LS_CUSTOM_PERSONA) || PERSONA_MAP["tsundere"])
+    : (PERSONA_MAP[personaMode] || PERSONA_MAP["tsundere"]);
+
+  const systemPrompt = `设定：${basePersona}\n当前系统时间：${timeString}。\n要求：请结合当前真实时间与你的设定，用不超过20个字回复或吐槽。严禁包含任何表情符号、颜文字或多余的解释。`;
+
+  try {
+    const resp = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: localStorage.getItem(LS_API_MODEL) || "gpt-3.5-turbo",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: "现在请跟我打招呼或者吐槽我。" },
+        ],
+        max_tokens: 80,
+        temperature: 0.9,
+      }),
+    });
+
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    const text = data.choices?.[0]?.message?.content?.trim();
+    if (text) {
+      showSpeech(text, 3000);
+      lastSmartSpeechTimestamp = nowTs;
+    } else {
+      throw new Error("Empty response");
+    }
+  } catch (err) {
+    console.error("LLM request failed:", err);
+    showSpeech("API 连不上，还是聊聊天吧", 3000);
+    fetchHitokoto();
+  }
+}
+
+function fetchHitokoto(): void {
+  fetch("https://v1.hitokoto.cn")
+    .then((r) => r.json())
+    .then((data) => {
+      const text = data.hitokoto as string | undefined;
+      if (text) showSpeech(text, 5000);
+    })
+    .catch(() => {});
+}
+
 function forceEndDrag(engine: PetEngine, container: HTMLElement): void {
   if (hasStartedDragging) {
     engine.applyState("idle");
@@ -274,6 +589,7 @@ async function setupDrag(engine: PetEngine): Promise<void> {
       } else {
         spawnParticles(e.clientX, e.clientY);
         playSound("pop");
+        triggerSmartSpeech();
       }
     }
 
@@ -391,7 +707,7 @@ async function endFocusMode(_isAuto: boolean, engine: PetEngine): Promise<void> 
 }
 
 async function setupContextMenu(engine: PetEngine): Promise<void> {
-  const { Menu, Submenu } = await import("@tauri-apps/api/menu");
+  const { Menu, Submenu, CheckMenuItem } = await import("@tauri-apps/api/menu");
   const appWindow = getCurrentWindow();
   const hitbox = document.getElementById("pet-hitbox");
   if (!hitbox) return;
@@ -432,6 +748,47 @@ async function setupContextMenu(engine: PetEngine): Promise<void> {
             panel.style.bottom = "20px";
           }
         }},
+        await (async () => {
+          const currentMode = localStorage.getItem(LS_CHAT_MODE) || "basic";
+          const currentPersona = localStorage.getItem(LS_PERSONA_MODE) || "tsundere";
+          const personaAction = (key: string) => () => {
+            localStorage.setItem(LS_CHAT_MODE, "awaken");
+            localStorage.setItem(LS_PERSONA_MODE, key);
+          };
+          return Submenu.new({
+            text: "对话模式",
+            items: [
+              await CheckMenuItem.new({
+                id: "mode-basic",
+                text: "基础闲聊 (Hitokoto)",
+                checked: currentMode === "basic",
+                action: () => {
+                  localStorage.setItem(LS_CHAT_MODE, "basic");
+                },
+              }),
+              await Submenu.new({
+                text: "全面觉醒 (大模型)",
+                items: [
+                  await CheckMenuItem.new({ id: "persona-sunny", text: "阳光开朗型", checked: currentMode === "awaken" && currentPersona === "sunny", action: personaAction("sunny") }),
+                  await CheckMenuItem.new({ id: "persona-gentle", text: "温柔体贴型", checked: currentMode === "awaken" && currentPersona === "gentle", action: personaAction("gentle") }),
+                  await CheckMenuItem.new({ id: "persona-ice", text: "高冷冰山型", checked: currentMode === "awaken" && currentPersona === "ice", action: personaAction("ice") }),
+                  await CheckMenuItem.new({ id: "persona-tsundere", text: "傲娇粘人型", checked: currentMode === "awaken" && currentPersona === "tsundere", action: personaAction("tsundere") }),
+                  await CheckMenuItem.new({ id: "persona-toxic", text: "犀利毒舌型", checked: currentMode === "awaken" && currentPersona === "toxic", action: personaAction("toxic") }),
+                  await CheckMenuItem.new({ id: "persona-joker", text: "腹黑沙雕型", checked: currentMode === "awaken" && currentPersona === "joker", action: personaAction("joker") }),
+                  { item: "Separator" as const },
+                  { id: "persona-custom", text: "自定义性格...", action: () => {
+                    localStorage.setItem(LS_CHAT_MODE, "awaken");
+                    localStorage.setItem(LS_PERSONA_MODE, "custom");
+                    showCustomPersonaPanel();
+                  }},
+                ],
+              }),
+              { item: "Separator" as const },
+              { id: "api-connect", text: "接入 API...", action: () => showApiSettingsPanel() },
+              { id: "github-connect", text: "关联 GitHub...", action: () => showGitHubSettingsPanel() },
+            ],
+          });
+        })(),
         { item: "Separator" },
         { id: "toggle-top", text: topLabel, action: async () => {
           isAlwaysOnTop = !isAlwaysOnTop;
@@ -702,6 +1059,13 @@ async function main(): Promise<void> {
   setupBioClock(engine);
   setupWakeUp(engine);
   setupVolumePanel();
+  setupApiSettingsPanel();
+  setupCustomPersonaPanel();
+  setupGitHubSettingsPanel();
+
+  // GitHub 贡献度监控：启动 3 秒后初检，之后每 5 分钟轮询
+  setTimeout(() => checkGitHubStatus(), 3000);
+  setInterval(() => checkGitHubStatus(), 5 * 60 * 1000);
   console.log("VibePet engine initialized");
 }
 

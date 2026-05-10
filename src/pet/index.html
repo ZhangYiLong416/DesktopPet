@@ -26,5 +26,46 @@
       <input type="range" id="volume-slider" min="0" max="100" value="60">
       <span id="volume-text">60</span>
     </div>
+    <div id="api-settings-panel" style="display: none;">
+      <div class="api-settings-title">API 节点设置</div>
+      <div class="api-settings-field">
+        <label for="api-endpoint">Endpoint</label>
+        <input type="text" id="api-endpoint" placeholder="支持 OpenAI 兼容格式接口" spellcheck="false" autocomplete="off">
+      </div>
+      <div class="api-settings-field">
+        <label for="api-key">Key</label>
+        <input type="password" id="api-key" placeholder="填入对应 API Key" spellcheck="false" autocomplete="off">
+      </div>
+      <div class="api-settings-field">
+        <label for="api-model">Model</label>
+        <input type="text" id="api-model" placeholder="例如: gpt-3.5-turbo" spellcheck="false" autocomplete="off">
+      </div>
+      <div class="api-settings-actions">
+        <button id="api-settings-cancel" class="btn-cancel">取消</button>
+        <button id="api-settings-save" class="btn-save">保存</button>
+      </div>
+    </div>
+    <div id="custom-persona-panel" style="display: none;">
+      <div class="api-settings-title">自定义性格设定</div>
+      <div class="api-settings-field">
+        <textarea id="custom-persona-text" rows="5" placeholder="设定它的语气、身份或习惯（如：你是一个傲娇秘书，喜欢说口头禅...）" spellcheck="false"></textarea>
+      </div>
+      <div class="api-settings-actions">
+        <button id="persona-settings-cancel" class="btn-cancel">取消</button>
+        <button id="persona-settings-save" class="btn-save">保存</button>
+      </div>
+    </div>
+    <div id="github-settings-panel" style="display: none;">
+      <div class="api-settings-title">GitHub 绿点监控</div>
+      <div class="api-settings-field">
+        <label>关联账号</label>
+        <input type="text" id="github-username-input" placeholder="仅输入 GitHub 用户名即可" spellcheck="false" autocomplete="off">
+      </div>
+      <div class="api-settings-actions">
+        <button id="github-settings-cancel" class="btn-cancel">取消</button>
+        <button id="github-settings-test" class="btn-test">测试</button>
+        <button id="github-settings-save" class="btn-save">跟踪</button>
+      </div>
+    </div>
   </body>
 </html>
