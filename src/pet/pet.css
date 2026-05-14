@@ -253,6 +253,7 @@ html, body {
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 16px;
+  overflow: hidden;
   padding: 16px;
   color: #eeeeee;
   font-family: system-ui, -apple-system, sans-serif;
@@ -275,14 +276,7 @@ html, body {
 .api-settings-field {
   display: flex;
   flex-direction: column;
-  margin-bottom: 12px;
-  gap: 6px;
-}
-
-.api-settings-field label {
-  font-size: 12px;
-  color: #cccccc;
-  user-select: none;
+  margin-bottom: 10px;
 }
 
 .api-settings-field input {
@@ -303,7 +297,7 @@ html, body {
 }
 
 .api-settings-field input::placeholder {
-  color: rgba(255, 255, 255, 0.25);
+  color: rgba(52, 211, 153, 0.4);
 }
 
 .api-settings-actions {
@@ -455,18 +449,37 @@ html, body {
   transform: translate(-50%, -50%);
   width: 90%;
   max-width: 280px;
+  max-height: calc(100vh - 20px);
+  overflow-y: auto;
   box-sizing: border-box;
   background: rgba(20, 20, 30, 0.95);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(0, 255, 170, 0.3);
-  border-radius: 16px;
+  border: 1px solid rgba(52, 211, 153, 0.5);
+  border-radius: 12px;
   padding: 14px;
   color: #eeeeee;
   font-family: "Cascadia Code", "Fira Code", "Consolas", monospace;
   z-index: 9999;
-  box-shadow: 0 0 18px rgba(0, 255, 170, 0.15), 0 8px 24px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 0 12px rgba(52, 211, 153, 0.2), inset 0 0 4px rgba(52, 211, 153, 0.1);
   pointer-events: auto;
+}
+
+#todo-panel::-webkit-scrollbar {
+  width: 6px;
+}
+
+#todo-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#todo-panel::-webkit-scrollbar-thumb {
+  background: rgba(52, 211, 153, 0.4);
+  border-radius: 4px;
+}
+
+#todo-panel::-webkit-scrollbar-thumb:hover {
+  background: rgba(52, 211, 153, 0.8);
 }
 
 .todo-panel-title {
@@ -550,7 +563,7 @@ html, body {
 }
 
 #todo-list::-webkit-scrollbar {
-  width: 3px;
+  width: 6px;
 }
 
 #todo-list::-webkit-scrollbar-track {
@@ -558,13 +571,20 @@ html, body {
 }
 
 #todo-list::-webkit-scrollbar-thumb {
-  background: rgba(0, 255, 170, 0.2);
-  border-radius: 2px;
+  background: rgba(52, 211, 153, 0.4);
+  border-radius: 4px;
+}
+
+#todo-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(52, 211, 153, 0.8);
 }
 
 /* Note item (permanent memo) */
 
 .todo-item-note {
+  display: flow-root;
+  min-height: 32px;
+  margin-bottom: 8px;
   overflow: hidden;
   background: rgba(0, 255, 170, 0.06);
   border: 1px solid rgba(0, 255, 170, 0.12);
@@ -631,6 +651,9 @@ html, body {
 /* Reminder item (countdown) */
 
 .todo-item-reminder {
+  display: flow-root;
+  min-height: 32px;
+  margin-bottom: 8px;
   overflow: hidden;
   background: rgba(60, 130, 246, 0.08);
   border: 1px solid rgba(60, 130, 246, 0.2);

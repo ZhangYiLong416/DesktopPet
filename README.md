@@ -105,16 +105,26 @@ Link your GitHub account to get notified about your commit activity:
 - Shows a congratulatory speech bubble when new commits are found
 - Includes a "Test" button to verify the username exists before saving
 
+### Smart Todo / Reminder System
+
+A neon-themed todo panel with two item types:
+
+- **Notes** -- Permanent memos stored in localStorage, with copy-to-clipboard and done buttons
+- **Reminders** -- Countdown timers with configurable delay, trigger a looping alarm sound and visual pulse when time is up
+
+Natural language time parsing: input like "30 minutes remind me to stand up" is automatically recognized. Falls back to LLM parsing for ambiguous text when API is configured.
+
 ### Sound System
 
-Four sound effects powered by HTML5 Audio API:
+Five sound effects powered by HTML5 Audio API:
 
 | Sound | Trigger |
 |---|---|
 | Pop | Pet click / particle spawn |
 | Boing | Wake up jump / drop impact |
 | Bubble | UI interactions |
-| Bell | Notifications |
+| Bell | Focus timer end |
+| Crunch | File drop / reminder alarm |
 
 All audio assets are bundled via Vite's `new URL()` import mechanism for correct path resolution in both dev and production builds.
 
@@ -164,25 +174,36 @@ Visual feedback for interaction states:
 
 Smooth transitions via `cubic-bezier(0.25, 0.8, 0.25, 1)`.
 
+### File Drop to Recycle Bin
+
+Drag and drop files onto the pet to move them to the recycle bin. The pet plays a "crunch" animation and sound on each drop.
+
 ### Context Menu
 
 Right-click the pet for a native Tauri menu:
 
-- Import pet (.zip) -- load a custom sprite sheet package
 - Animation demo submenu -- preview any state
+- Custom todo -- opens the todo/reminder panel
+- Focus timer submenu -- preset durations
 - Volume control
 - Chat mode submenu:
   - Basic chat (Hitokoto) -- toggle
   - Awaken mode submenu -- 6 personality presets + custom persona
   - Connect API...
   - Link GitHub...
-- Toggle always-on-top (persisted to localStorage)
-- Focus timer submenu -- preset durations
+- Settings submenu:
+  - Auto-start on boot
+  - Toggle always-on-top (persisted to localStorage)
+  - Import pet (.zip)
 - Quit (plays "failed" animation before exit)
+
+### Auto-Start
+
+Enable auto-start via the context menu settings. Uses the Tauri autostart plugin to register the application for launch on system boot.
 
 ### Pet Import
 
-Import custom pets as `.zip` files through the dialog or drag-and-drop. The Rust backend (`pet_import.rs`) extracts the zip, reads `pet.json` for metadata, and stores the pet in the app data directory.
+Import custom pets as `.zip` files through the dialog. The Rust backend (`pet_import.rs`) extracts the zip, reads `pet.json` for metadata, and stores the pet in the app data directory.
 
 ### Always-on-Top
 
@@ -203,6 +224,7 @@ When quitting, the pet plays a "failed" animation for 3 seconds while locking al
 | Audio | HTML5 Audio API |
 | API | OpenAI-compatible chat completions format |
 | Build | Cargo (Rust) + Vite (frontend) |
+| Installer | NSIS (non-oneclick, customizable install directory) |
 
 ## Project Structure
 
@@ -210,11 +232,11 @@ When quitting, the pet plays a "failed" animation for 3 seconds while locking al
 src/
   pet/                  # Pet window (transparent, borderless, always-on-top)
     index.html          # Entry HTML + all panel markup
-    pet.ts              # PetEngine, drag, bio-clock, speech, menu, API, GitHub
+    pet.ts              # PetEngine, drag, bio-clock, speech, menu, API, GitHub, todo
     pet.css             # All pet window styles (fluent glass panels)
     spritesheet.webp    # Default sprite sheet (fallback)
   assets/
-    audio/              # Sound effects (pop, boing, bubble, bell)
+    audio/              # Sound effects (pop, boing, bubble, bell, crunch)
   config/               # Configuration panel window (hidden by default)
     index.html
     config.ts
@@ -224,11 +246,12 @@ src/
 src-tauri/
   src/
     main.rs             # Tauri entry point
-    lib.rs              # Plugin registration, command handler
+    lib.rs              # Plugin registration, command handler, autostart
     pet_import.rs       # Zip import, pet manifest, file management
   tauri.conf.json       # Window config, permissions, bundle settings
   capabilities/
     default.json        # Tauri capability permissions
+  icons/                # App icons (auto-generated via tauri icon)
 ```
 
 ## Commands
@@ -240,7 +263,15 @@ npm run build          # TypeScript check + Vite production build
 npm run tauri build    # Full Tauri release build (generates installer)
 npx vite build         # Frontend-only build (skips tsc)
 cargo check            # Check Rust compilation (from src-tauri/)
+npx tauri icon <png>   # Generate app icons from a square PNG
 ```
+
+## Build Output
+
+After running `npm run tauri build`:
+
+- **NSIS installer**: `src-tauri/target/release/bundle/nsis/`
+- **Executable**: `src-tauri/target/release/vibe-pet.exe`
 
 ## Pet Package Format
 
@@ -273,7 +304,7 @@ The engine uses a default fallback: each row in the sprite sheet = one state, fr
 - **Hitbox separation.** Visual layer (`#pet-sprite`) and interaction layer (`#pet-hitbox`) are decoupled, following game development patterns for precise click targeting.
 - **Dual-window.** The pet window (`pet` label) is the always-visible desktop companion. The config window (`config` label) is hidden by default and can be shown programmatically.
 - **Particle lifecycle.** Particles are DOM elements appended to `document.body`, removed via `.remove()` on `animationend`.
-- **localStorage persistence.** All user preferences (API config, chat mode, persona, volume, GitHub username, always-on-top) survive across sessions.
+- **localStorage persistence.** All user preferences (API config, chat mode, persona, volume, GitHub username, always-on-top, todos) survive across sessions.
 
 ## License
 

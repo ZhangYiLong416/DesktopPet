@@ -184,6 +184,7 @@ function spawnParticles(x: number, y: number): void {
 
 let isMouseDown = false;
 let hasStartedDragging = false;
+let isDraggingInProgress = false;
 let dragThreshold = 5;
 let mouseDownX = 0;
 let mouseDownY = 0;
@@ -419,10 +420,15 @@ function setupGitHubSettingsPanel(): void {
 
 // ── Smart Todo Panel ──
 
+let todoPanelJustOpened = false;
+
 function showTodoPanel(): void {
   const panel = document.getElementById("todo-panel");
   if (!panel) return;
+  todoPanelJustOpened = true;
   panel.style.display = "block";
+  // 下一帧解除锁定，防止刚打开就被全局 mousedown 关闭
+  requestAnimationFrame(() => { todoPanelJustOpened = false; });
 }
 
 async function parseTodoIntent(userInput: string): Promise<TodoItem | null> {
@@ -557,6 +563,7 @@ function setupTodoPanel(): void {
 
   // 点击面板外部关闭
   document.addEventListener("mousedown", (e) => {
+    if (todoPanelJustOpened) return;
     if (panel.style.display === "block" && !panel.contains(e.target as Node)) {
       panel.style.display = "none";
     }
@@ -710,7 +717,10 @@ function setupTodoPanel(): void {
 
   async function handleSubmit(): Promise<void> {
     const raw = input.value.trim();
-    if (!raw) return;
+    if (!raw) {
+      panel.style.display = "none";
+      return;
+    }
 
     // 立即清空输入并收起面板，给用户即时反馈
     input.value = "";
@@ -893,6 +903,7 @@ function forceEndDrag(engine: PetEngine, container: HTMLElement): void {
   }
   isMouseDown = false;
   hasStartedDragging = false;
+  isDraggingInProgress = false;
   lastActivityTime = Date.now();
 }
 
@@ -905,7 +916,7 @@ async function setupDrag(engine: PetEngine): Promise<void> {
 
   // mousedown - 潜伏阶段
   hitbox.addEventListener("mousedown", (e) => {
-    if (e.button !== 0 || isExiting) return;
+    if (e.button !== 0 || isExiting || isDraggingInProgress) return;
 
     isMouseDown = true;
     hasStartedDragging = false;
@@ -918,14 +929,14 @@ async function setupDrag(engine: PetEngine): Promise<void> {
   });
 
   // mousemove - 拖拽判定 + 系统中断兜底
-  window.addEventListener("mousemove", async (e) => {
+  window.addEventListener("mousemove", (e) => {
     // 兜底检测：系统吞噬 mouseup 后的状态复位
     if (isMouseDown && e.buttons === 0) {
       forceEndDrag(engine, container);
       return;
     }
 
-    if (!isMouseDown || hasStartedDragging || isExiting) return;
+    if (!isMouseDown || hasStartedDragging || isExiting || isDraggingInProgress) return;
 
     const dx = e.clientX - mouseDownX;
     const dy = e.clientY - mouseDownY;
@@ -933,10 +944,15 @@ async function setupDrag(engine: PetEngine): Promise<void> {
 
     if (distance > dragThreshold) {
       hasStartedDragging = true;
-      // 切换到奔跑动画
+      isDraggingInProgress = true;
       engine.applyState("running");
-      // 交出拖拽权
-      await appWindow.startDragging();
+      // startDragging() 是异步的，返回即代表用户已释放鼠标
+      appWindow.startDragging().then(() => {
+        forceEndDrag(engine, container);
+      }).catch((err) => {
+        console.warn("startDragging failed:", err);
+        forceEndDrag(engine, container);
+      });
     }
   });
 
@@ -945,7 +961,7 @@ async function setupDrag(engine: PetEngine): Promise<void> {
     if (!isMouseDown) return;
 
     if (hasStartedDragging) {
-      forceEndDrag(engine, container);
+      // 拖拽中 mouseup 由 startDragging 的 then 分支处理
     } else {
       container.classList.remove("is-lifting");
       if (isFocusMode) {
