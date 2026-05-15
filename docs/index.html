@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VibePet - Your Desktop Companion</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eff6ff',
+              100: '#dbeafe',
+              200: '#bfdbfe',
+              300: '#93c5fd',
+              400: '#60a5fa',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Thin, subtle scrollbar for the whole page */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+    /* Smooth number counter animation */
+    @keyframes countUp {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .count-animate { animation: countUp 0.6s ease-out forwards; }
+
+    /* ---- Sprite sheet step animation ---- */
+    /* Grid: 8 columns x N rows, each cell 192x208px */
+    @keyframes sprite-step {
+      from { background-position-x: 0; }
+      to   { background-position-x: -1536px; }  /* 8 * 192 */
+    }
+
+    .sprite-action {
+      width: 192px;
+      height: 208px;
+      background-image: url('./assets/spritesheet.webp');
+      background-repeat: no-repeat;
+      animation: sprite-step 1.4s steps(8, end) infinite;
+    }
+
+    /* Row 0: Idle */
+    .sprite-idle   { background-position-y: 0; }
+    /* Row 1: Walk */
+    .sprite-walk   { background-position-y: -208px; }
+    /* Row 2: Run */
+    .sprite-run    { background-position-y: -416px; }
+    /* Row 3: Sit */
+    .sprite-sit    { background-position-y: -624px; }
+    /* Row 4: Sleep */
+    .sprite-sleep  { background-position-y: -832px; animation-duration: 2.4s; }
+    /* Row 5: Greet */
+    .sprite-greet  { background-position-y: -1040px; }
+    /* Row 6: Play */
+    .sprite-play   { background-position-y: -1248px; }
+
+    /* Responsive: scale sprite containers down on small screens */
+    @media (max-width: 640px) {
+      .sprite-action {
+        width: 96px;
+        height: 104px;
+        background-size: 768px auto;  /* scale 8-col strip: 96*8 */
+      }
+      .sprite-idle   { background-position-y: 0; }
+      .sprite-walk   { background-position-y: -104px; }
+      .sprite-run    { background-position-y: -208px; }
+      .sprite-sit    { background-position-y: -312px; }
+      .sprite-sleep  { background-position-y: -416px; }
+      .sprite-greet  { background-position-y: -520px; }
+      .sprite-play   { background-position-y: -624px; }
+    }
+
+    /* ---- Grid pattern background (design-tool canvas feel) ---- */
+    .bg-grid-pattern {
+      background-color: #ffffff;
+      background-image:
+        linear-gradient(to right, #f1f5f9 1px, transparent 1px),
+        linear-gradient(to bottom, #f1f5f9 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased">
+
+  <!-- ============================================================
+       NAVBAR
+       ============================================================ -->
+  <nav id="navbar"
+       class="fixed top-0 inset-x-0 z-50 border-b border-slate-200/60 bg-white/70 backdrop-blur-lg">
+    <div class="mx-auto max-w-6xl flex items-center justify-between px-6 h-16">
+
+      <!-- Left: Logo + Brand -->
+      <a href="#" class="flex items-center gap-2.5 group">
+        <!-- Minimal geometric logo (inline SVG) -->
+        <svg class="w-8 h-8 text-brand-500 transition-transform group-hover:scale-105"
+             viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="2" y="2" width="28" height="28" rx="8" fill="currentColor" opacity="0.12"/>
+          <circle cx="12" cy="14" r="3" fill="currentColor"/>
+          <circle cx="20" cy="14" r="3" fill="currentColor"/>
+          <path d="M10 21 C12 24 20 24 22 21" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" fill="none"/>
+        </svg>
+        <span class="text-lg font-bold tracking-tight text-slate-900">VibePet</span>
+      </a>
+
+      <!-- Center: Anchor links -->
+      <div class="hidden md:flex items-center gap-8 text-sm font-medium text-slate-500">
+        <a href="#showcase" class="hover:text-slate-900 transition-colors">动作展示</a>
+        <a href="#features" class="hover:text-slate-900 transition-colors">核心能力</a>
+        <a href="#pets" class="hover:text-slate-900 transition-colors">自定义宠物</a>
+        <a href="#faq" class="hover:text-slate-900 transition-colors">常见问题</a>
+      </div>
+
+      <!-- Right: Download count + GitHub -->
+      <div class="flex items-center gap-4">
+        <!-- Download counter -->
+        <div class="hidden sm:flex flex-col items-end leading-tight">
+          <span class="text-xs text-slate-400">总下载量</span>
+          <span id="download-count" class="text-base font-semibold text-slate-700 count-animate">--</span>
+        </div>
+
+        <!-- GitHub button -->
+        <div class="flex flex-col items-center">
+          <a href="https://github.com" target="_blank" rel="noopener"
+             class="inline-flex items-center gap-1.5 rounded-full border border-slate-200
+                    bg-white px-4 py-1.5 text-sm font-medium text-slate-700
+                    shadow-sm hover:bg-slate-50 hover:border-slate-300 transition-all">
+            <!-- GitHub icon -->
+            <svg class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 005.47 7.59c.4.07.55-.17.55-.38
+                       0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15
+                       -.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87
+                       2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95
+                       0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21
+                       2.2.82a7.63 7.63 0 014 0c1.53-1.04 2.2-.82 2.2-.82.44
+                       1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87
+                       3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01
+                       2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/>
+            </svg>
+            GitHub
+          </a>
+          <span class="mt-0.5 text-[10px] text-slate-400 leading-tight text-center">
+            如果有 GitHub 账号，麻烦来给个免费的 Star 吧
+          </span>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+
+  <!-- ============================================================
+       HERO SECTION
+       ============================================================ -->
+  <section id="hero" class="pt-16">
+    <div class="mx-auto max-w-4xl px-6 pt-20 pb-16 text-center">
+
+      <!-- H1 -->
+      <h1 class="text-5xl sm:text-6xl font-extrabold tracking-tight text-slate-900 leading-tight">
+        VibePet Companion
+      </h1>
+
+      <!-- Subtitle / tribute -->
+      <p class="mt-5 max-w-2xl mx-auto text-base sm:text-lg text-slate-400 leading-relaxed">
+        灵感来源于 Codex Pet，将其独立并赋予更多伴侣级桌面能力。<br class="hidden sm:inline" />
+        即便没有使用代码编辑器，也能拥有一只懂你的桌面宠物。
+      </p>
+
+      <!-- CTA Button -->
+      <div class="mt-8">
+        <a href="#download" id="cta-download"
+           class="inline-flex items-center gap-2 rounded-full bg-brand-500 px-8 py-3.5
+                  text-base font-semibold text-white shadow-lg shadow-brand-500/25
+                  hover:bg-brand-600 hover:shadow-xl hover:shadow-brand-500/30
+                  active:scale-[0.98] transition-all">
+          <!-- Download icon -->
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2"
+               viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/>
+          </svg>
+          下载最新版本 (Windows)
+        </a>
+      </div>
+
+      <!-- Hero screenshot placeholder -->
+      <div class="mt-14">
+        <div class="mx-auto max-w-3xl rounded-2xl overflow-hidden border border-slate-200
+                    shadow-xl shadow-slate-200/50 bg-white">
+          <img src="./assets/hero-demo.png"
+               alt="VibePet 运行截图"
+               class="w-full h-auto object-cover"
+               loading="eager" />
+        </div>
+        <p class="mt-3 text-xs text-slate-300">软件运行效果预览</p>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ============================================================
+       CUSTOM PETS SECTION
+       ============================================================ -->
+  <section id="pets" class="py-20 bg-white">
+    <div class="mx-auto max-w-5xl px-6">
+
+      <!-- Section header -->
+      <div class="text-center mb-14">
+        <h2 class="text-3xl sm:text-4xl font-bold text-slate-900">
+          海量自定义宠物，一键无缝切换
+        </h2>
+        <p class="mt-4 max-w-2xl mx-auto text-base text-slate-400 leading-relaxed">
+          不满足于默认形象？前往开源社区下载宠物压缩包，在 VibePet 中右键即可直接导入。
+        </p>
+      </div>
+
+      <!-- Two cards -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+        <!-- Card A: codexpet.xyz -->
+        <div class="group rounded-2xl border border-slate-200 bg-slate-50 overflow-hidden
+                    hover:shadow-lg hover:border-slate-300 transition-all duration-300">
+          <div class="p-6 pb-4">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="inline-block w-2 h-2 rounded-full bg-brand-400"></span>
+              <h3 class="text-lg font-semibold text-slate-800">
+                <a href="https://codexpet.xyz/zh" target="_blank" rel="noopener"
+                   class="hover:text-brand-600 transition-colors">
+                  codexpet.xyz/zh
+                </a>
+              </h3>
+            </div>
+            <p class="text-sm text-slate-400">社区维护的宠物资源站，持续更新中</p>
+          </div>
+          <div class="px-6 pb-6">
+            <div class="rounded-xl overflow-hidden border border-slate-100 bg-white">
+              <img src="./assets/codexpet-site.png"
+                   alt="codexpet.xyz 宠物列表预览"
+                   class="w-full h-auto object-cover"
+                   loading="lazy" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Card B: codex-pet.org -->
+        <div class="group rounded-2xl border border-slate-200 bg-slate-50 overflow-hidden
+                    hover:shadow-lg hover:border-slate-300 transition-all duration-300">
+          <div class="p-6 pb-4">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="inline-block w-2 h-2 rounded-full bg-emerald-400"></span>
+              <h3 class="text-lg font-semibold text-slate-800">
+                <a href="https://codex-pet.org/zh" target="_blank" rel="noopener"
+                   class="hover:text-brand-600 transition-colors">
+                  codex-pet.org/zh
+                </a>
+              </h3>
+            </div>
+            <p class="text-sm text-slate-400">Codex Pet 原始项目社区</p>
+          </div>
+          <div class="px-6 pb-6">
+            <div class="rounded-xl overflow-hidden border border-slate-100 bg-white">
+              <img src="./assets/codexpet-org.png"
+                   alt="codex-pet.org 宠物列表预览"
+                   class="w-full h-auto object-cover"
+                   loading="lazy" />
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ============================================================
+       FEATURES: Bento Box Layout
+       ============================================================ -->
+  <section id="features" class="py-20">
+    <div class="mx-auto max-w-5xl px-6">
+
+      <div class="text-center mb-14">
+        <h2 class="text-3xl sm:text-4xl font-bold text-slate-900">核心能力</h2>
+        <p class="mt-4 text-slate-400">不只是一个桌面摆件，而是一整套轻量生产力工具。</p>
+      </div>
+
+      <!-- Bento Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+
+        <!-- A: Smart Todo + Memo (spans 2 cols) -->
+        <div class="md:col-span-2 rounded-2xl border border-slate-200 bg-white p-6
+                    shadow-sm hover:shadow-md transition-shadow">
+          <h3 class="text-lg font-semibold text-slate-800">智能代办与桌面记事</h3>
+          <p class="mt-2 text-sm text-slate-400 leading-relaxed">
+            自然语言自动解析倒计时，或者作为轻量级桌面记事本。
+          </p>
+          <div class="mt-5 grid grid-cols-2 gap-3">
+            <div class="rounded-xl overflow-hidden border border-slate-100 bg-slate-50">
+              <img src="./assets/todo-demo.png"
+                   alt="智能代办演示"
+                   class="w-full h-auto object-cover"
+                   loading="lazy" />
+            </div>
+            <div class="rounded-xl overflow-hidden border border-slate-100 bg-slate-50">
+              <img src="./assets/memo-demo.png"
+                   alt="桌面记事演示"
+                   class="w-full h-auto object-cover"
+                   loading="lazy" />
+            </div>
+          </div>
+        </div>
+
+        <!-- B: Focus Mode (1 col, tall) -->
+        <div class="rounded-2xl border border-slate-200 bg-white p-6
+                    shadow-sm hover:shadow-md transition-shadow flex flex-col">
+          <h3 class="text-lg font-semibold text-slate-800">沉浸式专注模式</h3>
+          <p class="mt-2 text-sm text-slate-400 leading-relaxed">
+            5 至 60 分钟自定义番茄钟，专注期间宠物保持安静，到点铃声提醒。
+          </p>
+          <div class="mt-5 flex-1 rounded-xl overflow-hidden border border-slate-100 bg-slate-50">
+            <img src="./assets/pomodoro-demo.png"
+                 alt="专注模式演示"
+                 class="w-full h-auto object-cover"
+                 loading="lazy" />
+          </div>
+        </div>
+
+        <!-- C: AI Persona Chat (spans 2 cols) -->
+        <div class="md:col-span-2 rounded-2xl border border-slate-200 bg-white p-6
+                    shadow-sm hover:shadow-md transition-shadow">
+          <h3 class="text-lg font-semibold text-slate-800">AI 人格与全面觉醒</h3>
+          <p class="mt-2 text-sm text-slate-400 leading-relaxed">
+            内置傲娇猫、毒舌朋友等六大基础人格。填入你的自定义 API Endpoint 与 Key，解锁大模型完全体。
+          </p>
+          <div class="mt-5 rounded-xl overflow-hidden border border-slate-100 bg-slate-50">
+            <img src="./assets/chat-demo.png"
+                 alt="AI 对话演示"
+                 class="w-full h-auto object-cover"
+                 loading="lazy" />
+          </div>
+        </div>
+
+        <!-- D: Audio Awareness (1 col) -->
+        <div class="rounded-2xl border border-slate-200 bg-white p-6
+                    shadow-sm hover:shadow-md transition-shadow">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="inline-block w-2 h-2 rounded-full bg-violet-400"></span>
+            <h3 class="text-lg font-semibold text-slate-800">系统音频感知</h3>
+          </div>
+          <p class="text-sm text-slate-400 leading-relaxed">
+            基于 Windows 底层 WASAPI 峰值检测，随系统音乐跳动音符。
+          </p>
+        </div>
+
+        <!-- E: GitHub Monitor (1 col) -->
+        <div class="rounded-2xl border border-slate-200 bg-white p-6
+                    shadow-sm hover:shadow-md transition-shadow">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="inline-block w-2 h-2 rounded-full bg-amber-400"></span>
+            <h3 class="text-lg font-semibold text-slate-800">GitHub 提交监控</h3>
+          </div>
+          <p class="text-sm text-slate-400 leading-relaxed">
+            程序员专属彩蛋。绑定后，每次检测到新的 commit，宠物都会为你冒出鼓励语。
+          </p>
+        </div>
+
+        <!-- F: System Integration (spans 2 cols) -->
+        <div class="md:col-span-2 rounded-2xl border border-slate-200 bg-white p-6
+                    shadow-sm hover:shadow-md transition-shadow">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="inline-block w-2 h-2 rounded-full bg-teal-400"></span>
+            <h3 class="text-lg font-semibold text-slate-800">系统深度集成</h3>
+          </div>
+          <p class="text-sm text-slate-400 leading-relaxed">
+            开机自启 / 状态持久化置顶 / 拖拽文件到宠物身上直接送入回收站。
+          </p>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ============================================================
+       SHOWCASE: Sprite Sheet Animations
+       ============================================================ -->
+  <section id="showcase" class="py-20 bg-white">
+    <div class="mx-auto max-w-5xl px-6">
+
+      <div class="text-center mb-14">
+        <h2 class="text-3xl sm:text-4xl font-bold text-slate-900">动作展示</h2>
+        <p class="mt-4 text-slate-400">七种内置动态动作，每一种都有独特的个性表达。</p>
+      </div>
+
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6 justify-items-center">
+
+        <!-- Row 0: Idle -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+          <div class="bg-grid-pattern flex items-center justify-center p-4 rounded-t-2xl">
+            <div class="sprite-action sprite-idle"></div>
+          </div>
+          <div class="border-t border-slate-100 text-center py-3">
+            <span class="text-sm text-slate-600 font-semibold">待机</span>
+          </div>
+        </div>
+
+        <!-- Row 1: Walk -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+          <div class="bg-grid-pattern flex items-center justify-center p-4 rounded-t-2xl">
+            <div class="sprite-action sprite-walk"></div>
+          </div>
+          <div class="border-t border-slate-100 text-center py-3">
+            <span class="text-sm text-slate-600 font-semibold">行走</span>
+          </div>
+        </div>
+
+        <!-- Row 2: Run -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+          <div class="bg-grid-pattern flex items-center justify-center p-4 rounded-t-2xl">
+            <div class="sprite-action sprite-run"></div>
+          </div>
+          <div class="border-t border-slate-100 text-center py-3">
+            <span class="text-sm text-slate-600 font-semibold">奔跑</span>
+          </div>
+        </div>
+
+        <!-- Row 3: Sit -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+          <div class="bg-grid-pattern flex items-center justify-center p-4 rounded-t-2xl">
+            <div class="sprite-action sprite-sit"></div>
+          </div>
+          <div class="border-t border-slate-100 text-center py-3">
+            <span class="text-sm text-slate-600 font-semibold">坐下</span>
+          </div>
+        </div>
+
+        <!-- Row 4: Sleep -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+          <div class="bg-grid-pattern flex items-center justify-center p-4 rounded-t-2xl">
+            <div class="sprite-action sprite-sleep"></div>
+          </div>
+          <div class="border-t border-slate-100 text-center py-3">
+            <span class="text-sm text-slate-600 font-semibold">睡觉</span>
+          </div>
+        </div>
+
+        <!-- Row 5: Greet -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+          <div class="bg-grid-pattern flex items-center justify-center p-4 rounded-t-2xl">
+            <div class="sprite-action sprite-greet"></div>
+          </div>
+          <div class="border-t border-slate-100 text-center py-3">
+            <span class="text-sm text-slate-600 font-semibold">打招呼</span>
+          </div>
+        </div>
+
+        <!-- Row 6: Play -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+          <div class="bg-grid-pattern flex items-center justify-center p-4 rounded-t-2xl">
+            <div class="sprite-action sprite-play"></div>
+          </div>
+          <div class="border-t border-slate-100 text-center py-3">
+            <span class="text-sm text-slate-600 font-semibold">玩耍</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ============================================================
+       FAQ
+       ============================================================ -->
+  <section id="faq" class="py-20 bg-white">
+    <div class="mx-auto max-w-3xl px-6">
+
+      <div class="text-center mb-14">
+        <h2 class="text-3xl sm:text-4xl font-bold text-slate-900">常见问题</h2>
+      </div>
+
+      <div class="space-y-0">
+
+        <!-- Q1 -->
+        <div class="border-b border-slate-100 py-6">
+          <h3 class="text-base font-semibold text-slate-800">
+            软件收费吗？
+          </h3>
+          <p class="mt-2 text-sm text-slate-400 leading-relaxed">
+            完全免费开源。大模型对话功能由于接入的是你自己的 API Key，所以取决于你使用的模型厂商资费（也完全可以使用免费的 API）。
+          </p>
+        </div>
+
+        <!-- Q2 -->
+        <div class="border-b border-slate-100 py-6">
+          <h3 class="text-base font-semibold text-slate-800">
+            支持 Mac 或 Linux 吗？
+          </h3>
+          <p class="mt-2 text-sm text-slate-400 leading-relaxed">
+            暂不提供编译好的安装包。目前主打 Windows 体验，但由于基于 Tauri 框架，你可以克隆源码自行在 Mac 下编译运行。
+          </p>
+        </div>
+
+        <!-- Q3 -->
+        <div class="border-b border-slate-100 py-6">
+          <h3 class="text-base font-semibold text-slate-800">
+            怎么更换自己喜欢的宠物？
+          </h3>
+          <p class="mt-2 text-sm text-slate-400 leading-relaxed">
+            在网页上方前往开源社区下载 <code class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-xs">.zip</code> 格式的宠物包，右键点击桌面上的宠物，进入设置，导入宠物即可。
+          </p>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ============================================================
+       FOOTER
+       ============================================================ -->
+  <footer class="border-t border-slate-200 bg-white">
+    <div class="mx-auto max-w-6xl px-6 py-10 flex flex-col sm:flex-row
+                items-center justify-between gap-4 text-sm text-slate-400">
+      <span>VibePet &mdash; MIT License</span>
+      <div class="flex items-center gap-6">
+        <a href="https://github.com" target="_blank" rel="noopener"
+           class="hover:text-slate-600 transition-colors">GitHub</a>
+        <a href="#hero" class="hover:text-slate-600 transition-colors">回到顶部</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ============================================================
+       DOWNLOAD COUNTER SCRIPT
+       ============================================================ -->
+  <script>
+    (function () {
+      var COUNTER_API = 'https://api.counterapi.dev/v1';
+      var NAMESPACE = 'vibepet-downloads-count';
+      var KEY = 'total';
+      var DOWNLOAD_URL = 'https://github.com/Muxinlucky/DesktopPet/releases/download/v1.0.0/VibePet_1.0.0_x64_en-US.msi';
+
+      var countEl = document.getElementById('download-count');
+
+      // Fetch current count on page load
+      fetch(COUNTER_API + '/' + NAMESPACE + '/' + KEY)
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          if (data && typeof data.data === 'number') {
+            countEl.textContent = data.data.toLocaleString();
+          }
+        })
+        .catch(function () {
+          // Keep default display on failure
+        });
+
+      // Increment on CTA click, then redirect after 300ms
+      var ctaBtn = document.getElementById('cta-download');
+      if (ctaBtn) {
+        ctaBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          fetch(COUNTER_API + '/' + NAMESPACE + '/' + KEY + '/up', { method: 'POST' })
+            .catch(function () {});
+          setTimeout(function () {
+            window.location.href = DOWNLOAD_URL;
+          }, 300);
+        });
+      }
+    })();
+  </script>
+
+</body>
+</html>
