@@ -261,11 +261,8 @@ function setupApiSettingsPanel(): void {
     if (!epInput || !keyInput) return;
 
     let endpoint = epInput.value.trim().replace(/\/+$/, "");
-    if (!/\/v1(\/|$)/.test(endpoint)) {
-      endpoint += "/v1";
-    }
     if (!endpoint.endsWith("/chat/completions")) {
-      endpoint += "/chat/completions";
+      endpoint += "/v1/chat/completions";
     }
     epInput.value = endpoint;
 
@@ -424,7 +421,17 @@ let todoPanelJustOpened = false;
 
 function showTodoPanel(): void {
   const panel = document.getElementById("todo-panel");
+  const input = document.getElementById("todo-input") as HTMLInputElement | null;
   if (!panel) return;
+
+  // 根据 API 配置状态切换 placeholder
+  if (input) {
+    const hasApi = !!localStorage.getItem(LS_API_ENDPOINT) && !!localStorage.getItem(LS_API_KEY);
+    input.placeholder = hasApi
+      ? "10分钟后叫我喝水 / 学习深度学习"
+      : "输入记事内容 (配置 API 解锁倒计时)";
+  }
+
   todoPanelJustOpened = true;
   panel.style.display = "block";
   // 下一帧解除锁定，防止刚打开就被全局 mousedown 关闭
@@ -446,11 +453,8 @@ async function parseTodoIntent(userInput: string): Promise<TodoItem | null> {
   }
 
   let endpoint = endpoint0.trim().replace(/\/+$/, "");
-  if (!/\/v1(\/|$)/.test(endpoint)) {
-    endpoint += "/v1";
-  }
   if (!endpoint.endsWith("/chat/completions")) {
-    endpoint += "/chat/completions";
+    endpoint += "/v1/chat/completions";
   }
 
   const systemPrompt = 'Reply only with JSON: {"type":"note","delayMinutes":null,"taskText":"<task>"}.';
@@ -726,7 +730,23 @@ function setupTodoPanel(): void {
     input.value = "";
     panel.style.display = "none";
 
-    const item = await parseTodoIntent(raw);
+    const hasApi = !!localStorage.getItem(LS_API_ENDPOINT) && !!localStorage.getItem(LS_API_KEY);
+
+    let item: TodoItem | null;
+
+    if (!hasApi) {
+      // 无 API：直接作为记事本条目，跳过 AI 解析
+      item = {
+        id: `todo_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        type: "note",
+        taskText: raw,
+        createdAt: Date.now(),
+        delayMinutes: null,
+      };
+    } else {
+      // 有 API：走 AI 意图解析
+      item = await parseTodoIntent(raw);
+    }
 
     if (!item) return;
 
@@ -817,9 +837,9 @@ async function triggerSmartSpeech(): Promise<void> {
   }
 
   // 地址自动修正：去除空格，补全 /chat/completions
-  endpoint = endpoint.trim();
+  endpoint = endpoint.trim().replace(/\/+$/, "");
   if (!endpoint.endsWith("/chat/completions")) {
-    endpoint = endpoint.replace(/\/+$/, "") + "/chat/completions";
+    endpoint += "/v1/chat/completions";
   }
 
   const now = new Date();

@@ -581,8 +581,6 @@ html, body {
 .todo-item-note {
   display: flow-root;
   min-height: 32px;
-  margin-bottom: 8px;
-  overflow: hidden;
   background: rgba(0, 255, 170, 0.06);
   border: 1px solid rgba(0, 255, 170, 0.12);
   border-radius: 8px;
@@ -594,13 +592,14 @@ html, body {
   font-size: 12px;
   color: #d0d0d0;
   word-break: break-word;
+  white-space: normal;
 }
 
 .todo-actions {
   float: right;
   display: flex;
   gap: 4px;
-  margin-left: 8px;
+  margin-left: 12px;
   margin-bottom: 4px;
 }
 
@@ -650,8 +649,6 @@ html, body {
 .todo-item-reminder {
   display: flow-root;
   min-height: 32px;
-  margin-bottom: 8px;
-  overflow: hidden;
   background: rgba(60, 130, 246, 0.08);
   border: 1px solid rgba(60, 130, 246, 0.2);
   border-radius: 8px;
@@ -663,18 +660,19 @@ html, body {
   font-size: 12px;
   color: #d0d0d0;
   word-break: break-word;
+  white-space: normal;
 }
 
 .todo-item-reminder .todo-countdown {
   float: right;
   font-size: 11px;
-  margin-left: 8px;
-  margin-bottom: 4px;
   font-weight: 600;
   color: #3c82f6;
   text-shadow: 0 0 6px rgba(60, 130, 246, 0.4);
   min-width: 60px;
   text-align: right;
+  margin-left: 12px;
+  margin-bottom: 4px;
 }
 
 /* Reminder pulse (pet visual feedback) */

@@ -1,14 +1,16 @@
-# SmartTodo Assistant
+# VibePet
 
 [简体中文](README.md)
 
-> A desktop intelligent assistant powered by LLM intent parsing and system audio awareness -- Tauri v2 + Rust kernel, neon floating UI, zero-framework pure DOM rendering.
+> A desktop AI soul pet -- built on Tauri v2 + Rust kernel, zero-framework pure DOM rendering, ultra-lightweight at just 5MB.
+
+Inspired by Codex Pet, standalone with even more companion-level desktop capabilities. No code editor needed -- just a pet that understands you.
 
 ## Core Features
 
 ### Smart Intent Todo
 
-Connects to DeepSeek or other LLM APIs. Natural language input is automatically classified as either an alarm reminder or a permanent memo.
+With an LLM API connected, natural language input is automatically classified as a countdown reminder or a permanent memo:
 
 ```
 "remind me to drink water in 30 min"  -->  countdown timer, looping alarm + visual pulse
@@ -16,7 +18,7 @@ Connects to DeepSeek or other LLM APIs. Natural language input is automatically 
 "call me for a meeting in 1 hour"     -->  countdown timer
 ```
 
-Ambiguous time expressions fall back to LLM semantic parsing -- no strict format required.
+Without an API configured, it falls back to a simple notepad mode with one-click copy.
 
 ### AI Persona Chat
 
@@ -33,42 +35,57 @@ Connects to any OpenAI-compatible API with six built-in personality presets and 
 
 First click triggers a full LLM response, then falls back to lightweight quotes. 10-minute cooldown before the next LLM trigger -- balancing experience and cost.
 
-### System Audio Awareness
+### Focus Mode
 
-Real-time peak detection via Windows Core Audio API at the system output level. When music is playing, particles float to the beat. When silent, the pet stays quiet.
+A freely adjustable Pomodoro timer (5-60 minutes). During focus, the pet stays quiet and displays a countdown. A bell rings when time is up.
 
-### Geek Aesthetic UI
+### Holiday Blessings
 
-Dark neon floating panels -- frosted glass backgrounds, rounded glowing borders, custom neon scrollbars. All panels are overlay layers, never intruding on the desktop layout.
+Built-in calendar that automatically sends greetings on the first boot of a holiday.
+
+### Interactive Easter Eggs
+
+Click the pet's body to spawn random emoji tags and speech bubbles overhead. Seven built-in animated actions (idle, walk, run, sit, sleep, greet, play), each with its own personality.
+
+### Custom Pet Skins
+
+Import community-made pet packages (`.zip`) and switch with one click. From ikun to Nai Dragon -- or create your own from friends, family, or loved ones.
+
+Visit [codexpet.xyz](https://codexpet.xyz/zh) or [codex-pet.org](https://codex-pet.org/zh) for more pets.
+
+### Ultra Lightweight
+
+The installer is only 5MB. Background residence has zero impact on system performance.
 
 ### Deep System Integration
 
+- System audio awareness -- music notes float to the beat when audio is playing
+- File drop to recycle bin -- drag files onto the pet to delete
+- GitHub commit monitoring -- bind your account and the pet cheers on new commits
 - Auto-start on boot (Tauri autostart plugin)
 - Always-on-top (preference persisted across sessions)
-- File drop to recycle bin (drag files onto the pet to delete)
-- GitHub commit monitoring (pet cheers when new commits are detected)
 
-### Focus Mode
+### Rich Right-Click Menu
 
-5 / 15 / 30 / 45 / 60 minute Pomodoro timer. During focus, the pet stays quiet and displays a countdown. A bell rings when time is up.
+Right-click the pet to open a feature menu with everything at a glance.
 
 ## Quick Start
 
 **Install**
 
-Download the latest installer (`.msi` or `setup.exe`) from the [Releases](../../releases) page. Launch after installation.
+Download the latest installer (`.msi` or `setup.exe`) from the [Releases](https://github.com/Muxinlucky/DesktopPet/releases) page. Launch after installation.
 
-**Configure API**
+**Configure API (Optional)**
 
 Right-click the pet > Chat Mode > Connect API, and fill in:
 
 | Field | Description |
 |-------|-------------|
-| Endpoint | API service URL (any OpenAI-compatible endpoint, `/v1` auto-appended) |
+| Endpoint | API service URL (any OpenAI-compatible endpoint) |
 | Key | Your API key |
-| Model | Model name (defaults to `gpt-3.5-turbo`) |
+| Model | Model name |
 
-Click "Save" to test connectivity. Green means success.
+Click "Save" to test connectivity. Green means success. Free API setup tutorial: [getAPI.md](docs/getAPI.md).
 
 ## Basic Controls
 
@@ -89,16 +106,14 @@ npm run tauri dev      # Development mode (hot reload)
 npm run tauri build    # Production build (generates installer)
 ```
 
-Build output is located at `src-tauri/target/release/bundle/nsis/`.
+Build output is located at `src-tauri/target/release/bundle/` (both NSIS and MSI formats).
 
 ## Technical Specs
 
 - **Runtime**: Tauri v2 (Rust backend + WebView2 frontend)
 - **Frontend**: Vite + TypeScript, zero-framework pure DOM rendering
 - **Animation**: CSS `steps()` sprite engine, no Canvas/WebGL
-- **Installer**: NSIS, customizable install directory
-
-See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed architecture documentation.
+- **Installer**: NSIS (.exe) / MSI, customizable install directory
 
 ## Pet Package Format
 
@@ -106,10 +121,10 @@ Supports importing custom pets (`.zip` files):
 
 ```
 pet.json              -- Pet manifest (id, displayName, description, spritesheetPath, version)
-spritesheet.webp      -- Sprite sheet (8 columns x N rows, 192x208 per cell)
+spritesheet.webp      -- Sprite sheet (192x208 per cell, actions arranged by row)
 ```
 
-Right-click > Settings > Import Pet (.zip) to swap.
+Right-click > Settings > Import Pet (.zip) to swap. Detailed tutorial: [Import Guide](docs/daorujiaocheng.md).
 
 ## License
 

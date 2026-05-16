@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>VibePet - Your Desktop Companion</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700;9..144,800&display=swap" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -11,70 +14,328 @@
         extend: {
           colors: {
             brand: {
-              50: '#eff6ff',
-              100: '#dbeafe',
-              200: '#bfdbfe',
-              300: '#93c5fd',
-              400: '#60a5fa',
-              500: '#3b82f6',
-              600: '#2563eb',
-              700: '#1d4ed8',
+              50:  '#f0fdfa',
+              100: '#ccfbf1',
+              200: '#99f6e4',
+              300: '#5eead4',
+              400: '#2dd4bf',
+              500: '#14b8a6',
+              600: '#0f766e',
+              700: '#0d5d56',
+              800: '#115e59',
+              900: '#134e4a',
             }
+          },
+          fontFamily: {
+            display: ['Fraunces', 'Georgia', 'serif'],
           }
         }
       }
     }
   </script>
   <style>
-    /* Thin, subtle scrollbar for the whole page */
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-    /* Smooth number counter animation */
+    /* ---- Body multi-gradient background ---- */
+    body {
+      background-color: #f4fbfe;
+      background-image:
+        radial-gradient(circle at 0% 0%, rgba(0, 180, 216, 0.18), transparent 35%),
+        radial-gradient(circle at 100% 0%, rgba(118, 200, 147, 0.18), transparent 35%),
+        radial-gradient(circle at 0% 100%, rgba(144, 224, 239, 0.15), transparent 45%),
+        radial-gradient(circle at 100% 100%, rgba(181, 228, 140, 0.15), transparent 40%),
+        linear-gradient(180deg, rgba(202, 240, 248, 0.3) 0%, rgba(255, 255, 255, 0.6) 50%, rgba(217, 237, 146, 0.3) 100%);
+      background-attachment: fixed;
+    }
+
     @keyframes countUp {
       from { opacity: 0; transform: translateY(4px); }
       to { opacity: 1; transform: translateY(0); }
     }
     .count-animate { animation: countUp 0.6s ease-out forwards; }
 
-    /* ---- Sprite sheet step animation ---- */
-    /* Grid: 8 columns x N rows, each cell 192x208px */
-    @keyframes sprite-step {
-      from { background-position-x: 0; }
-      to   { background-position-x: -1536px; }  /* 8 * 192 */
+    /* ---- Hero shell ---- */
+    .hero-shell {
+      background: transparent;
     }
+
+    /* ---- Toplink (nav links) ---- */
+    .toplink {
+      position: relative; padding-bottom: 2px;
+      color: #64748b; transition: color .2s;
+    }
+    .toplink::after {
+      content: ''; position: absolute; left: 0; bottom: 0;
+      width: 0; height: 1.5px; background: #0f766e;
+      transition: width .25s ease;
+    }
+    .toplink:hover { color: #0f766e; }
+    .toplink:hover::after { width: 100%; }
+
+    /* ---- Nav pill buttons ---- */
+    .nav-pill {
+      display: inline-block;
+      padding: 6px 16px;
+      border-radius: 100px;
+      background: rgba(255,255,255,.5);
+      border: 1px solid rgba(226,232,240,.5);
+      box-shadow: 0 1px 2px rgba(0,0,0,.04);
+      color: #64748b;
+      transition: all .2s ease;
+    }
+    .nav-pill:hover {
+      background: #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,.06);
+      color: #0f766e;
+    }
+
+    /* ---- Buttons ---- */
+    .button-primary {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 14px 28px;
+      background: linear-gradient(135deg, #14b8a6 0%, #0f766e 100%);
+      color: #fff; font-weight: 600; font-size: .95rem;
+      border-radius: 14px;
+      box-shadow: 0 4px 14px rgba(15,118,110,.25);
+      transition: all .25s ease;
+    }
+    .button-primary:hover {
+      box-shadow: 0 6px 20px rgba(15,118,110,.35);
+      transform: translateY(-1px);
+    }
+
+    .button-secondary {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 14px 28px;
+      background: #fff; color: #334155; font-weight: 600; font-size: .95rem;
+      border: 1.5px solid #e2e8f0; border-radius: 14px;
+      transition: all .25s ease;
+    }
+    .button-secondary:hover {
+      border-color: #94a3b8; background: #f8fafc;
+      transform: translateY(-1px);
+    }
+
+    /* ---- Screen shell ---- */
+    .screen-shell {
+      background: #1e293b;
+      border-radius: 16px;
+      padding: 10px 10px 0 10px;
+      box-shadow: 0 25px 60px rgba(0,0,0,.12), 0 8px 20px rgba(0,0,0,.08);
+      position: relative;
+    }
+    .screen-dots {
+      display: flex; gap: 6px; margin-bottom: 10px; padding-left: 4px;
+    }
+    .screen-dots span {
+      width: 10px; height: 10px; border-radius: 50%;
+    }
+
+    /* ---- Float notes ---- */
+    .float-note {
+      position: absolute;
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 10px 16px;
+      box-shadow: 0 4px 16px rgba(0,0,0,.06);
+      font-size: .8rem;
+      white-space: nowrap;
+      z-index: 10;
+    }
+    .float-note strong {
+      display: block;
+      font-size: .75rem;
+      font-weight: 700;
+      color: #0f766e;
+      margin-bottom: 2px;
+    }
+    .float-note span {
+      color: #64748b;
+      font-size: .72rem;
+    }
+
+    /* ---- Stat card ---- */
+    .stat-card {
+      background: rgba(255,255,255,0.6);
+      border: 1px solid rgba(255,255,255,0.6);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-radius: 10px;
+      padding: 10px 8px;
+      text-align: center;
+      transition: all .25s ease;
+    }
+    .stat-card:hover {
+      border-color: #99f6e4;
+      box-shadow: 0 4px 16px rgba(20,184,166,.08);
+    }
+    .stat-num {
+      font-family: 'Fraunces', Georgia, serif;
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: #0f766e;
+      line-height: 1;
+    }
+    .stat-label {
+      margin-top: 4px;
+      font-size: .7rem;
+      color: #94a3b8;
+    }
+
+    /* ---- Feature tag ---- */
+    .feat-tag {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 14px;
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 100px;
+      font-size: .78rem;
+      color: #475569;
+      font-weight: 500;
+      transition: all .2s;
+    }
+    .feat-tag:hover { border-color: #99f6e4; }
+
+    /* ---- FAQ items ---- */
+    .faq-item {
+      border-bottom: 1px solid rgba(226,232,240,0.6);
+      padding: 18px 0 18px 16px;
+      transition: all .3s ease;
+      position: relative;
+    }
+    .faq-item::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 18px;
+      bottom: 18px;
+      width: 3px;
+      border-radius: 2px;
+      background: transparent;
+      transition: background .3s ease, transform .3s ease;
+      transform: scaleY(0.4);
+    }
+    .faq-item:hover::before,
+    .faq-item[open]::before {
+      background: linear-gradient(180deg, #00b4d8, #0077b6);
+      transform: scaleY(1);
+    }
+    .faq-item:hover,
+    .faq-item[open] {
+      padding-left: 24px;
+      background: rgba(255,255,255,0.25);
+      border-radius: 12px;
+    }
+    .faq-item summary {
+      font-weight: 600;
+      color: #1e293b;
+      cursor: pointer;
+      user-select: none;
+      list-style: none;
+      outline: none;
+      font-size: 0.9375rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .faq-item summary::-webkit-details-marker { display: none; }
+    .faq-item summary::after {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-right: 2px solid #94a3b8;
+      border-bottom: 2px solid #94a3b8;
+      transform: rotate(-45deg);
+      transition: transform .3s ease, border-color .3s ease;
+      flex-shrink: 0;
+      margin-left: 12px;
+    }
+    .faq-item[open] summary::after {
+      transform: rotate(45deg);
+      border-color: #00b4d8;
+    }
+    .faq-item .faq-answer {
+      margin-top: 10px;
+      font-size: 0.9375rem;
+      color: #64748b;
+      line-height: 1.7;
+      padding-right: 8px;
+    }
+    .feat-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #14b8a6;
+    }
+
+    /* ---- Animated letters ---- */
+    .animated-letter {
+      display: inline-block;
+      font-family: 'Fraunces', Georgia, serif;
+      font-weight: 800;
+      font-size: 1.5rem;
+      letter-spacing: 0.05em;
+      color: #0f766e;
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.3s ease;
+      cursor: default;
+      animation: letterFloat 3s ease-in-out infinite;
+    }
+    .animated-letter:nth-child(1) { animation-delay: 0s; }
+    .animated-letter:nth-child(2) { animation-delay: 0.15s; }
+    .animated-letter:nth-child(3) { animation-delay: 0.3https://github.com/Muxinlucky/DesktopPet/releases/download/v1.0.0/VibePet_1.0.0_x64_en-US.msis; }
+    .animated-letter:nth-child(5) { animation-delay: 0.6s; }
+    .animated-letter:nth-child(6) { animation-delay: 0.75s; }
+    .animated-letter:nth-child(7) { animation-delay: 0.9s; }
+    @keyframes letterFloat {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-4px); }
+    }
+    .animated-letter:hover {
+      animation-play-state: paused;
+      transform: translateY(-6px) scale(1.15);
+      color: #00b4d8;
+    }
+
+    /* ---- Infinite scroll tracks for hero background ---- */
+    @keyframes coolorsScrollUp {
+      0% { transform: translateY(0); }
+      100% { transform: translateY(-50%); }
+    }
+    @keyframes coolorsScrollDown {
+      0% { transform: translateY(-50%); }
+      100% { transform: translateY(0); }
+    }
+    .scroll-track-1 { animation: coolorsScrollUp 25s linear infinite; }
+    .scroll-track-2 { animation: coolorsScrollDown 30s linear infinite; }
+    .scroll-track-3 { animation: coolorsScrollUp 22s linear infinite; }
+    .scroll-track-4 { animation: coolorsScrollDown 28s linear infinite; }
+
+    /* ---- Sprite sheet animation: per-action frame counts ---- */
+    @keyframes anim4 { 100% { background-position-x: -768px; } }
+    @keyframes anim5 { 100% { background-position-x: -960px; } }
+    @keyframes anim6 { 100% { background-position-x: -1152px; } }
+    @keyframes anim8 { 100% { background-position-x: -1536px; } }
 
     .sprite-action {
-      width: 192px;
-      height: 208px;
+      width: 192px; height: 208px;
       background-image: url('./assets/spritesheet.webp');
       background-repeat: no-repeat;
-      animation: sprite-step 1.4s steps(8, end) infinite;
     }
+    .sprite-idle   { background-position-y: 0;      animation: anim5 1.0s steps(5) infinite; }
+    .sprite-walk   { background-position-y: -208px;  animation: anim8 1.2s steps(8) infinite; }
+    .sprite-run    { background-position-y: -416px;  animation: anim8 1.0s steps(8) infinite; }
+    .sprite-sit    { background-position-y: -624px;  animation: anim4 0.8s steps(4) infinite; }
+    .sprite-sleep  { background-position-y: -832px;  animation: anim5 1.5s steps(5) infinite; }
+    .sprite-greet  { background-position-y: -1040px; animation: anim8 1.2s steps(8) infinite; }
+    .sprite-play   { background-position-y: -1248px; animation: anim6 1.2s steps(6) infinite; }
 
-    /* Row 0: Idle */
-    .sprite-idle   { background-position-y: 0; }
-    /* Row 1: Walk */
-    .sprite-walk   { background-position-y: -208px; }
-    /* Row 2: Run */
-    .sprite-run    { background-position-y: -416px; }
-    /* Row 3: Sit */
-    .sprite-sit    { background-position-y: -624px; }
-    /* Row 4: Sleep */
-    .sprite-sleep  { background-position-y: -832px; animation-duration: 2.4s; }
-    /* Row 5: Greet */
-    .sprite-greet  { background-position-y: -1040px; }
-    /* Row 6: Play */
-    .sprite-play   { background-position-y: -1248px; }
-
-    /* Responsive: scale sprite containers down on small screens */
     @media (max-width: 640px) {
       .sprite-action {
-        width: 96px;
-        height: 104px;
-        background-size: 768px auto;  /* scale 8-col strip: 96*8 */
+        width: 96px; height: 104px;
+        background-size: 768px auto;
       }
       .sprite-idle   { background-position-y: 0; }
       .sprite-walk   { background-position-y: -104px; }
@@ -85,7 +346,13 @@
       .sprite-play   { background-position-y: -624px; }
     }
 
-    /* ---- Grid pattern background (design-tool canvas feel) ---- */
+    /* ---- Showcase sprite scale ---- */
+    .showcase-sprite {
+      transform: scale(0.65) translateY(58px);
+      transform-origin: top center;
+    }
+
+    /* ---- Grid pattern background ---- */
     .bg-grid-pattern {
       background-color: #ffffff;
       background-image:
@@ -95,186 +362,275 @@
     }
   </style>
 </head>
-<body class="bg-slate-50 text-slate-800 antialiased">
+<body class="text-slate-800 antialiased">
 
   <!-- ============================================================
-       NAVBAR
+       HERO SHELL (Nav + Hero)
        ============================================================ -->
-  <nav id="navbar"
-       class="fixed top-0 inset-x-0 z-50 border-b border-slate-200/60 bg-white/70 backdrop-blur-lg">
-    <div class="mx-auto max-w-6xl flex items-center justify-between px-6 h-16">
+  <div class="hero-shell">
 
-      <!-- Left: Logo + Brand -->
-      <a href="#" class="flex items-center gap-2.5 group">
-        <!-- Minimal geometric logo (inline SVG) -->
-        <svg class="w-8 h-8 text-brand-500 transition-transform group-hover:scale-105"
-             viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="2" y="2" width="28" height="28" rx="8" fill="currentColor" opacity="0.12"/>
-          <circle cx="12" cy="14" r="3" fill="currentColor"/>
-          <circle cx="20" cy="14" r="3" fill="currentColor"/>
-          <path d="M10 21 C12 24 20 24 22 21" stroke="currentColor"
-                stroke-width="2" stroke-linecap="round" fill="none"/>
-        </svg>
-        <span class="text-lg font-bold tracking-tight text-slate-900">VibePet</span>
-      </a>
-
-      <!-- Center: Anchor links -->
-      <div class="hidden md:flex items-center gap-8 text-sm font-medium text-slate-500">
-        <a href="#showcase" class="hover:text-slate-900 transition-colors">动作展示</a>
-        <a href="#features" class="hover:text-slate-900 transition-colors">核心能力</a>
-        <a href="#pets" class="hover:text-slate-900 transition-colors">自定义宠物</a>
-        <a href="#faq" class="hover:text-slate-900 transition-colors">常见问题</a>
-      </div>
-
-      <!-- Right: Download count + GitHub -->
-      <div class="flex items-center gap-4">
-        <!-- Download counter -->
-        <div class="hidden sm:flex flex-col items-end leading-tight">
-          <span class="text-xs text-slate-400">总下载量</span>
-          <span id="download-count" class="text-base font-semibold text-slate-700 count-animate">--</span>
-        </div>
-
-        <!-- GitHub button -->
-        <div class="flex flex-col items-center">
-          <a href="https://github.com" target="_blank" rel="noopener"
-             class="inline-flex items-center gap-1.5 rounded-full border border-slate-200
-                    bg-white px-4 py-1.5 text-sm font-medium text-slate-700
-                    shadow-sm hover:bg-slate-50 hover:border-slate-300 transition-all">
-            <!-- GitHub icon -->
-            <svg class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 005.47 7.59c.4.07.55-.17.55-.38
-                       0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15
-                       -.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87
-                       2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95
-                       0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21
-                       2.2.82a7.63 7.63 0 014 0c1.53-1.04 2.2-.82 2.2-.82.44
-                       1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87
-                       3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01
-                       2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/>
-            </svg>
-            GitHub
-          </a>
-          <span class="mt-0.5 text-[10px] text-slate-400 leading-tight text-center">
-            如果有 GitHub 账号，麻烦来给个免费的 Star 吧
-          </span>
-        </div>
-      </div>
-    </div>
-  </nav>
-
-
-  <!-- ============================================================
-       HERO SECTION
-       ============================================================ -->
-  <section id="hero" class="pt-16">
-    <div class="mx-auto max-w-4xl px-6 pt-20 pb-16 text-center">
-
-      <!-- H1 -->
-      <h1 class="text-5xl sm:text-6xl font-extrabold tracking-tight text-slate-900 leading-tight">
+    <!-- Topbar -->
+    <nav class="relative mx-auto max-w-6xl flex items-center justify-between px-6 py-5">
+      <a href="#" class="text-xl font-bold tracking-tight text-slate-800 hover:text-brand-600 transition-colors">
         VibePet Companion
-      </h1>
-
-      <!-- Subtitle / tribute -->
-      <p class="mt-5 max-w-2xl mx-auto text-base sm:text-lg text-slate-400 leading-relaxed">
-        灵感来源于 Codex Pet，将其独立并赋予更多伴侣级桌面能力。<br class="hidden sm:inline" />
-        即便没有使用代码编辑器，也能拥有一只懂你的桌面宠物。
-      </p>
-
-      <!-- CTA Button -->
-      <div class="mt-8">
-        <a href="#download" id="cta-download"
-           class="inline-flex items-center gap-2 rounded-full bg-brand-500 px-8 py-3.5
-                  text-base font-semibold text-white shadow-lg shadow-brand-500/25
-                  hover:bg-brand-600 hover:shadow-xl hover:shadow-brand-500/30
-                  active:scale-[0.98] transition-all">
-          <!-- Download icon -->
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2"
-               viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/>
+      </a>
+      <div class="hidden md:flex items-center gap-3 text-sm font-medium">
+        <a href="#pets" class="nav-pill">宠物库</a>
+        <a href="#features" class="nav-pill">能力</a>
+        <a href="#showcase" class="nav-pill">预览</a>
+        <a href="#faq" class="nav-pill">FAQ</a>
+      </div>
+      <div class="flex items-center gap-4">
+        <div class="flex items-center space-x-2">
+          <span class="relative flex h-2 w-2">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-teal-500"></span>
+          </span>
+          <span class="text-sm font-medium text-slate-600">下载量: <span id="nav-download-count">读取中...</span></span>
+        </div>
+        <a href="https://github.com/Muxinlucky/DesktopPet" target="_blank" rel="noopener"
+           class="toplink inline-flex items-center gap-1.5 text-sm font-medium">
+          <svg class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 005.47 7.59c.4.07.55-.17.55-.38
+                     0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15
+                     -.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87
+                     2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95
+                     0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21
+                     2.2.82a7.63 7.63 0 014 0c1.53-1.04 2.2-.82 2.2-.82.44
+                     1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87
+                     3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01
+                     2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/>
           </svg>
-          下载最新版本 (Windows)
+          GitHub
         </a>
       </div>
+      <!-- Bottom divider -->
+      <div class="absolute bottom-0 left-0 w-full h-[1.5px] bg-gradient-to-r from-transparent via-slate-300 to-transparent"></div>
+    </nav>
 
-      <!-- Hero screenshot placeholder -->
-      <div class="mt-14">
-        <div class="mx-auto max-w-3xl rounded-2xl overflow-hidden border border-slate-200
-                    shadow-xl shadow-slate-200/50 bg-white">
-          <img src="./assets/hero-demo.png"
-               alt="VibePet 运行截图"
-               class="w-full h-auto object-cover"
-               loading="eager" />
+    <!-- Hero Grid: visual left, text right -->
+    <section id="hero" class="mx-auto max-w-6xl px-6 pt-8 pb-20">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+
+        <!-- Left: Visual -->
+        <div class="relative overflow-hidden rounded-[2.5rem] h-[560px] p-4 bg-white/40 border-2 border-slate-100/80 shadow-[0_25px_60px_-15px_rgba(0,119,182,0.1)] backdrop-blur-xl transition-all duration-300 hover:border-sky-100 order-2 lg:order-1">
+
+          <!-- Animated title -->
+          <div class="absolute top-6 left-0 w-full flex justify-center z-30 pointer-events-auto">
+            <div class="flex space-x-1 select-none">
+              <span class="animated-letter">V</span>
+              <span class="animated-letter">i</span>
+              <span class="animated-letter">b</span>
+              <span class="animated-letter">e</span>
+              <span class="animated-letter">P</span>
+              <span class="animated-letter">e</span>
+              <span class="animated-letter">t</span>
+            </div>
+          </div>
+
+          <!-- A. Bottom layer: 4 scroll tracks -->
+          <div class="absolute top-20 left-0 right-0 bottom-0 grid grid-cols-4 gap-3 p-3">
+            <!-- Track 1 -->
+            <div class="overflow-hidden">
+              <div class="scroll-track-1">
+                <div class="flex items-center justify-center bg-white/60 backdrop-blur-sm aspect-square rounded-2xl border border-white/60 shadow-sm transition-transform hover:scale-105 duration-300 overflow-hidden mb-3"><img src="./assets/scroll-1.gif" class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain" alt="" /></div>
+                <div class="flex items-center justify-center bg-white/60 backdrop-blur-sm aspect-square rounded-2xl border border-white/60 shadow-sm transition-transform hover:scale-105 duration-300 overflow-hidden mb-3"><img src="./assets/scroll-2.gif" class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain" alt="" /></div>
+                <div class="flex items-center justify-center bg-white/60 backdrop-blur-sm aspect-square rounded-2xl border border-white/60 shadow-sm transition-transform hover:scale-105 duration-300 overflow-hidden mb-3"><img src="./assets/scroll-3.gif" class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain" alt="" /></div>
+                <div class="flex items-center justify-center bg-white/60 backdrop-blur-sm aspect-square rounded-2xl border border-white/60 shadow-sm transition-transform hover:scale-105 duration-300 overflow-hidden mb-3"><img src="./assets/scroll-4.gif" class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain" alt="" /></div>
+                <!-- Duplicate for seamless loop -->
+                <div class="flex items-center justify-center bg-white/60 backdrop-blur-sm aspect-square rounded-2xl border border-white/60 shadow-sm transition-transform hover:scale-105 duration-300 overflow-hidden mb-3"><img src="./assets/scroll-1.gif" class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain" alt="" /></div>
+                <div class="flex items-center justify-center bg-white/60 backdrop-blur-sm aspect-square rounded-2xl border border-white/60 shadow-sm transition-transform hover:scale-105 duration-300 overflow-hidden mb-3"><img src="./assets/scroll-2.gif" class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain" alt="" /></div>
+                <div class="flex items-center justify-center bg-white/60 backdrop-blur-sm aspect-square rounded-2xl border border-white/60 shadow-sm transition-transform hover:scale-105 duration-300 overflow-hidden mb-3"><img src="./assets/scroll-3.gif" class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain" alt="" /></div>
+                <div class="flex items-center justify-center bg-white/60 backdrop-blur-sm aspect-square rounded-2xl border border-white/60 shadow-sm transition-transform hover:scale-105 duration-300 overflow-hidden mb-3"><img src="./assets/scroll-4.gif" class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain" alt="" /></div>
+              </div>
+            </div>
+            <!-- Track 2 -->
+            <div class="overflow-hidden">
+              <div class="scroll-track-2">
+                <div class="flex items-center justify-center bg-white/60 backdrop-blur-sm aspect-square rounded-2xl border border-white/60 shadow-sm transition-transform hover:scale-105 duration-300 overflow-hidden mb-3"><img src="./assets/scroll-5.gif" class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain" alt="" /></div>
+                <div class="flex items-center justify-center bg-white/60 backdrop-blur-sm aspect-square rounded-2xl border border-white/60 shadow-sm transition-transform hover:scale-105 duration-300 overflow-hidden mb-3"><img src="./assets/scroll-6.gif" class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain" alt="" /></div>
+                <div class="flex items-center justify-center bg-white/60 backdrop-blur-sm aspect-square rounded-2xl border border-white/60 shadow-sm transition-transform hover:scale-105 duration-300 overflow-hidden mb-3"><img src="./assets/scroll-7.gif" class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain" alt="" /></div>
+                <div class="flex items-center justify-center bg-white/60 backdrop-blur-sm aspect-square rounded-2xl border border-white/60 shadow-sm transition-transform hover:scale-105 duration-300 overflow-hidden mb-3"><img src="./assets/scroll-8.gif" class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain" alt="" /></div>
+                <div class="flex items-center justify-center bg-white/60 backdrop-blur-sm aspect-square rounded-2xl border border-white/60 shadow-sm transition-transform hover:scale-105 duration-300 overflow-hidden mb-3"><img src="./assets/scroll-5.gif" class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain" alt="" /></div>
+                <div class="flex items-center justify-center bg-white/60 backdrop-blur-sm aspect-square rounded-2xl border border-white/60 shadow-sm transition-transform hover:scale-105 duration-300 overflow-hidden mb-3"><img src="./assets/scroll-6.gif" class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain" alt="" /></div>
+                <div class="flex items-center justify-center bg-white/60 backdrop-blur-sm aspect-square rounded-2xl border border-white/60 shadow-sm transition-transform hover:scale-105 duration-300 overflow-hidden mb-3"><img src="./assets/scroll-7.gif" class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain" alt="" /></div>
+                <div class="flex items-center justify-center bg-white/60 backdrop-blur-sm aspect-square rounded-2xl border border-white/60 shadow-sm transition-transform hover:scale-105 duration-300 overflow-hidden mb-3"><img src="./assets/scroll-8.gif" class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain" alt="" /></div>
+              </div>
+            </div>
+            <!-- Track 3 -->
+            <div class="overflow-hidden">
+              <div class="scroll-track-3">
+                <div class="flex items-center justify-center bg-white/60 backdrop-blur-sm aspect-square rounded-2xl border border-white/60 shadow-sm transition-transform hover:scale-105 duration-300 overflow-hidden mb-3"><img src="./assets/scroll-9.gif" class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain" alt="" /></div>
+                <div class="flex items-center justify-center bg-white/60 backdrop-blur-sm aspect-square rounded-2xl border border-white/60 shadow-sm transition-transform hover:scale-105 duration-300 overflow-hidden mb-3"><img src="./assets/scroll-10.gif" class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain" alt="" /></div>
+                <div class="flex items-center justify-center bg-white/60 backdrop-blur-sm aspect-square rounded-2xl border border-white/60 shadow-sm transition-transform hover:scale-105 duration-300 overflow-hidden mb-3"><img src="./assets/scroll-11.gif" class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain" alt="" /></div>
+                <div class="flex items-center justify-center bg-white/60 backdrop-blur-sm aspect-square rounded-2xl border border-white/60 shadow-sm transition-transform hover:scale-105 duration-300 overflow-hidden mb-3"><img src="./assets/scroll-12.gif" class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain" alt="" /></div>
+                <div class="flex items-center justify-center bg-white/60 backdrop-blur-sm aspect-square rounded-2xl border border-white/60 shadow-sm transition-transform hover:scale-105 duration-300 overflow-hidden mb-3"><img src="./assets/scroll-9.gif" class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain" alt="" /></div>
+                <div class="flex items-center justify-center bg-white/60 backdrop-blur-sm aspect-square rounded-2xl border border-white/60 shadow-sm transition-transform hover:scale-105 duration-300 overflow-hidden mb-3"><img src="./assets/scroll-10.gif" class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain" alt="" /></div>
+                <div class="flex items-center justify-center bg-white/60 backdrop-blur-sm aspect-square rounded-2xl border border-white/60 shadow-sm transition-transform hover:scale-105 duration-300 overflow-hidden mb-3"><img src="./assets/scroll-11.gif" class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain" alt="" /></div>
+                <div class="flex items-center justify-center bg-white/60 backdrop-blur-sm aspect-square rounded-2xl border border-white/60 shadow-sm transition-transform hover:scale-105 duration-300 overflow-hidden mb-3"><img src="./assets/scroll-12.gif" class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain" alt="" /></div>
+              </div>
+            </div>
+            <!-- Track 4 -->
+            <div class="overflow-hidden">
+              <div class="scroll-track-4">
+                <div class="flex items-center justify-center bg-white/60 backdrop-blur-sm aspect-square rounded-2xl border border-white/60 shadow-sm transition-transform hover:scale-105 duration-300 overflow-hidden mb-3"><img src="./assets/scroll-13.gif" class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain" alt="" /></div>
+                <div class="flex items-center justify-center bg-white/60 backdrop-blur-sm aspect-square rounded-2xl border border-white/60 shadow-sm transition-transform hover:scale-105 duration-300 overflow-hidden mb-3"><img src="./assets/scroll-14.gif" class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain" alt="" /></div>
+                <div class="flex items-center justify-center bg-white/60 backdrop-blur-sm aspect-square rounded-2xl border border-white/60 shadow-sm transition-transform hover:scale-105 duration-300 overflow-hidden mb-3"><img src="./assets/scroll-15.gif" class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain" alt="" /></div>
+                <div class="flex items-center justify-center bg-white/60 backdrop-blur-sm aspect-square rounded-2xl border border-white/60 shadow-sm transition-transform hover:scale-105 duration-300 overflow-hidden mb-3"><img src="./assets/scroll-16.gif" class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain" alt="" /></div>
+                <div class="flex items-center justify-center bg-white/60 backdrop-blur-sm aspect-square rounded-2xl border border-white/60 shadow-sm transition-transform hover:scale-105 duration-300 overflow-hidden mb-3"><img src="./assets/scroll-13.gif" class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain" alt="" /></div>
+                <div class="flex items-center justify-center bg-white/60 backdrop-blur-sm aspect-square rounded-2xl border border-white/60 shadow-sm transition-transform hover:scale-105 duration-300 overflow-hidden mb-3"><img src="./assets/scroll-14.gif" class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain" alt="" /></div>
+                <div class="flex items-center justify-center bg-white/60 backdrop-blur-sm aspect-square rounded-2xl border border-white/60 shadow-sm transition-transform hover:scale-105 duration-300 overflow-hidden mb-3"><img src="./assets/scroll-15.gif" class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain" alt="" /></div>
+                <div class="flex items-center justify-center bg-white/60 backdrop-blur-sm aspect-square rounded-2xl border border-white/60 shadow-sm transition-transform hover:scale-105 duration-300 overflow-hidden mb-3"><img src="./assets/scroll-16.gif" class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain" alt="" /></div>
+              </div>
+            </div>
+          </div>
+
         </div>
-        <p class="mt-3 text-xs text-slate-300">软件运行效果预览</p>
+
+        <!-- Right: Text -->
+        <div class="order-1 lg:order-2">
+          <!-- Eyebrow -->
+          <p class="text-sm font-semibold tracking-widest text-brand-600 uppercase mb-4">
+            Desktop Control Surface For AI Pet Companion
+          </p>
+
+          <!-- H1 -->
+          <h1 class="font-display text-4xl sm:text-5xl lg:text-[3.4rem] font-800 leading-[1.15] text-slate-900">
+            一个桌面，养育你的 AI 灵魂宠物。
+          </h1>
+
+          <!-- Subtitle -->
+          <p class="mt-5 text-lg text-slate-600 leading-relaxed max-w-lg">
+            灵感来源于 Codex Pet，将其独立并赋予更多伴侣级桌面能力。即便没有使用代码编辑器，也能拥有一只懂你的桌面宠物。
+            如果你有Github账号，贡献一颗免费的小星星⭐我将不胜感激！
+          </p>
+
+          <!-- Button group -->
+          <div class="mt-8 flex flex-wrap gap-4">
+            <a href="#download" id="cta-download" class="button-primary">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2"
+                   viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/>
+              </svg>
+              下载安装包
+            </a>
+            <a href="https://github.com/Muxinlucky/DesktopPet" target="_blank" rel="noopener" class="button-secondary">
+              <svg class="w-5 h-5" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 005.47 7.59c.4.07.55-.17.55-.38
+                         0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15
+                         -.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87
+                         2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95
+                         0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21
+                         2.2.82a7.63 7.63 0 014 0c1.53-1.04 2.2-.82 2.2-.82.44
+                         1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87
+                         3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01
+                         2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/>
+              </svg>
+              View on GitHub
+            </a>
+          </div>
+
+          <!-- Feature tags -->
+          <div class="mt-8 flex flex-wrap gap-2.5">
+            <span class="feat-tag"><span class="feat-dot"></span>AI Intent</span>
+            <span class="feat-tag"><span class="feat-dot"></span>Audio Sensing</span>
+            <span class="feat-tag"><span class="feat-dot"></span>Tauri v2</span>
+            <span class="feat-tag"><span class="feat-dot"></span>Rust Core</span>
+          </div>
+
+          <!-- Stats grid -->
+          <div class="mt-6 grid grid-cols-2 md:grid-cols-4 gap-2.5">
+            <div class="stat-card">
+              <div class="stat-num">AI</div>
+              <div class="stat-label">模型接入智能回复</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-num">7</div>
+              <div class="stat-label">七种动作随心变化</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-num">5MB</div>
+              <div class="stat-label">极致轻量占用</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-num">&#8734;</div>
+              <div class="stat-label">随机语录热情陪伴</div>
+            </div>
+          </div>
+        </div>
+
       </div>
-    </div>
-  </section>
+
+      <!-- Divider -->
+      <div class="w-full h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent mt-24"></div>
+    </section>
+  </div>
 
 
   <!-- ============================================================
        CUSTOM PETS SECTION
        ============================================================ -->
-  <section id="pets" class="py-20 bg-white">
-    <div class="mx-auto max-w-5xl px-6">
+  <section id="pets" class="py-20">
+    <div class="mx-auto max-w-6xl px-6">
 
       <!-- Section header -->
       <div class="text-center mb-14">
         <h2 class="text-3xl sm:text-4xl font-bold text-slate-900">
           海量自定义宠物，一键无缝切换
         </h2>
-        <p class="mt-4 max-w-2xl mx-auto text-base text-slate-400 leading-relaxed">
+        <p class="mt-4 max-w-2xl mx-auto text-base text-slate-500 leading-relaxed">
           不满足于默认形象？前往开源社区下载宠物压缩包，在 VibePet 中右键即可直接导入。
         </p>
       </div>
 
       <!-- Two cards -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
         <!-- Card A: codexpet.xyz -->
-        <div class="group rounded-2xl border border-slate-200 bg-slate-50 overflow-hidden
+        <div class="group rounded-2xl border border-white/60 bg-white/60 backdrop-blur-lg overflow-hidden
                     hover:shadow-lg hover:border-slate-300 transition-all duration-300">
           <div class="p-6 pb-4">
             <div class="flex items-center gap-2 mb-1">
-              <span class="inline-block w-2 h-2 rounded-full bg-brand-400"></span>
+              <span class="inline-block w-2 h-2 rounded-full text-sm bg-brand-400"></span>
               <h3 class="text-lg font-semibold text-slate-800">
                 <a href="https://codexpet.xyz/zh" target="_blank" rel="noopener"
-                   class="hover:text-brand-600 transition-colors">
+                   class="hover:text-brand-600 transition-colors underline">
                   codexpet.xyz/zh
                 </a>
               </h3>
             </div>
-            <p class="text-sm text-slate-400">社区维护的宠物资源站，持续更新中</p>
+            <p class="text-[0.9375rem] text-slate-500">社区维护的宠物资源站，持续更新中，<a href="./daorujiaocheng.md" target="_blank" class="underline text-sky-600 hover:text-sky-800">下载更换宠物教程</a></p>
           </div>
           <div class="px-6 pb-6">
-            <div class="rounded-xl overflow-hidden border border-slate-100 bg-white">
+            <div class="rounded-xl overflow-hidden border border-white/60 bg-white/40">
               <img src="./assets/codexpet-site.png"
                    alt="codexpet.xyz 宠物列表预览"
-                   class="w-full h-auto object-cover"
+                   class="w-full h-auto object-contain rounded-2xl shadow-xl"
                    loading="lazy" />
             </div>
           </div>
         </div>
 
         <!-- Card B: codex-pet.org -->
-        <div class="group rounded-2xl border border-slate-200 bg-slate-50 overflow-hidden
+        <div class="group rounded-2xl border border-white/60 bg-white/60 backdrop-blur-lg overflow-hidden
                     hover:shadow-lg hover:border-slate-300 transition-all duration-300">
           <div class="p-6 pb-4">
             <div class="flex items-center gap-2 mb-1">
-              <span class="inline-block w-2 h-2 rounded-full bg-emerald-400"></span>
+              <span class="inline-block w-2 h-2 rounded-full text-sm bg-emerald-400"></span>
               <h3 class="text-lg font-semibold text-slate-800">
                 <a href="https://codex-pet.org/zh" target="_blank" rel="noopener"
-                   class="hover:text-brand-600 transition-colors">
+                   class="hover:text-brand-600 transition-colors underline">
                   codex-pet.org/zh
                 </a>
               </h3>
             </div>
-            <p class="text-sm text-slate-400">Codex Pet 原始项目社区</p>
+            <p class="text-[0.9375rem] text-slate-500">Codex Pet 原始项目社区，<a href="./daorujiaocheng.md" target="_blank" class="underline text-sky-600 hover:text-sky-800">下载更换宠物教程</a></p>
           </div>
           <div class="px-6 pb-6">
-            <div class="rounded-xl overflow-hidden border border-slate-100 bg-white">
+            <div class="rounded-xl overflow-hidden border border-white/60 bg-white/40">
               <img src="./assets/codexpet-org.png"
                    alt="codex-pet.org 宠物列表预览"
-                   class="w-full h-auto object-cover"
+                   class="w-full h-auto object-contain rounded-2xl shadow-xl"
                    loading="lazy" />
             </div>
           </div>
@@ -289,103 +645,104 @@
        FEATURES: Bento Box Layout
        ============================================================ -->
   <section id="features" class="py-20">
-    <div class="mx-auto max-w-5xl px-6">
+    <div class="mx-auto max-w-7xl px-6">
 
       <div class="text-center mb-14">
         <h2 class="text-3xl sm:text-4xl font-bold text-slate-900">核心能力</h2>
-        <p class="mt-4 text-slate-400">不只是一个桌面摆件，而是一整套轻量生产力工具。</p>
+        <p class="mt-4 text-slate-500">不只是一个桌面摆件，而是一整套轻量生产力工具。</p>
       </div>
 
-      <!-- Bento Grid -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <!-- Standard 4x2 Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 
-        <!-- A: Smart Todo + Memo (spans 2 cols) -->
-        <div class="md:col-span-2 rounded-2xl border border-slate-200 bg-white p-6
-                    shadow-sm hover:shadow-md transition-shadow">
-          <h3 class="text-lg font-semibold text-slate-800">智能代办与桌面记事</h3>
-          <p class="mt-2 text-sm text-slate-400 leading-relaxed">
-            自然语言自动解析倒计时，或者作为轻量级桌面记事本。
-          </p>
-          <div class="mt-5 grid grid-cols-2 gap-3">
-            <div class="rounded-xl overflow-hidden border border-slate-100 bg-slate-50">
-              <img src="./assets/todo-demo.png"
-                   alt="智能代办演示"
-                   class="w-full h-auto object-cover"
-                   loading="lazy" />
+        <!-- Card 1 -->
+        <div class="flex flex-col bg-white/60 backdrop-blur-md rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden h-[340px] transition-transform hover:-translate-y-1 duration-300">
+          <div class="p-5 shrink-0">
+            <h3 class="text-lg font-bold text-slate-800">自定义代办</h3>
+            <p class="text-sm text-slate-500 mt-2">输入x秒（分钟）后提醒我干什么开始倒计时，时间到了变大提醒</p>
+          </div>
+          <div class="flex-1 relative bg-slate-50/50">
+            <img src="./assets/todo-demo.png" alt="自定义代办演示" class="w-full h-full object-cover" loading="lazy" />
+          </div>
+        </div>
+
+        <!-- Card 2 -->
+        <div class="flex flex-col bg-white/60 backdrop-blur-md rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden h-[340px] transition-transform hover:-translate-y-1 duration-300">
+          <div class="p-5 shrink-0">
+            <h3 class="text-lg font-bold text-slate-800">小小记事本</h3>
+            <p class="text-sm text-slate-500 mt-2">一个暂时的粘贴板，适用于有多个需要粘贴以备复制场景，一键复制</p>
+          </div>
+          <div class="flex-1 relative bg-slate-50/50">
+            <img src="./assets/memo-demo.png" alt="小小记事本演示" class="w-full h-full object-cover" loading="lazy" />
+          </div>
+        </div>
+
+        <!-- Card 3 -->
+        <div class="flex flex-col bg-white/60 backdrop-blur-md rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden h-[340px] transition-transform hover:-translate-y-1 duration-300">
+          <div class="p-5 shrink-0">
+            <h3 class="text-lg font-bold text-slate-800">专注模式</h3>
+            <p class="text-sm text-slate-500 mt-2">一个pet倒计时，5-60分钟专注学习时间自定义</p>
+          </div>
+          <div class="flex-1 relative bg-slate-50/50">
+            <img src="./assets/zhuanzhumoshi.png" alt="专注模式演示" class="w-full h-full object-cover" loading="lazy" />
+          </div>
+        </div>
+
+        <!-- Card 4 -->
+        <div class="flex flex-col bg-white/60 backdrop-blur-md rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden h-[340px] transition-transform hover:-translate-y-1 duration-300">
+          <div class="p-5 shrink-0">
+            <h3 class="text-lg font-bold text-slate-800">节日祝福</h3>
+            <p class="text-sm text-slate-500 mt-2">内置日历，节日当天首次开机送上祝福</p>
+          </div>
+          <div class="flex-1 relative bg-slate-50/50">
+            <img src="./assets/jierizhufu.png" alt="节日祝福演示" class="w-full h-full object-cover" loading="lazy" />
+          </div>
+        </div>
+
+        <!-- Card 5 -->
+        <div class="flex flex-col bg-white/60 backdrop-blur-md rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden h-[340px] transition-transform hover:-translate-y-1 duration-300">
+          <div class="p-5 shrink-0">
+            <h3 class="text-lg font-bold text-slate-800">互动彩蛋</h3>
+            <p class="text-sm text-slate-500 mt-2">点击身体随机出现黄脸标签，头顶上方出现各种语录</p>
+          </div>
+          <div class="flex-1 relative bg-slate-50/50">
+            <img src="./assets/chat-demo.png" alt="互动彩蛋演示" class="w-full h-full object-cover" loading="lazy" />
+          </div>
+        </div>
+
+        <!-- Card 6 -->
+        <div class="flex flex-col bg-white/60 backdrop-blur-md rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden h-[340px] transition-transform hover:-translate-y-1 duration-300">
+          <div class="p-5 shrink-0">
+            <h3 class="text-lg font-bold text-slate-800">自定义形象</h3>
+            <p class="text-sm text-slate-500 mt-2">支持切换导入自己喜欢的宠物，ikun，奶龙......支持自己创作，甚至可以把亲人，朋友，情侣创作出来陪伴</p>
+          </div>
+          <div class="flex-1 relative bg-slate-50/50">
+            <img src="./assets/codexpet-site.png" alt="自定义形象演示" class="w-full h-full object-cover" loading="lazy" />
+          </div>
+        </div>
+
+        <!-- Card 7 -->
+        <div class="flex flex-col bg-white/60 backdrop-blur-md rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden h-[340px] transition-transform hover:-translate-y-1 duration-300">
+          <div class="p-5 shrink-0">
+            <h3 class="text-lg font-bold text-slate-800">极致轻量</h3>
+            <p class="text-sm text-slate-500 mt-2">pet体积仅5MB，后台常驻完全不影响</p>
+          </div>
+          <div class="flex-1 relative bg-slate-50/50">
+            <img src="./assets/volume.png" alt="极致轻量演示" class="w-full h-full object-cover" loading="lazy" />
+          </div>
+        </div>
+
+        <!-- Card 8: text only -->
+        <div class="flex flex-col bg-white/60 backdrop-blur-md rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden h-[340px] transition-transform hover:-translate-y-1 duration-300">
+          <div class="flex flex-col justify-center h-full p-6 text-center">
+            <h3 class="text-lg font-bold text-slate-800">API 接入</h3>
+            <p class="text-sm text-slate-500 mt-2">填入自定义 API Endpoint 与 Key，解锁大模型完全体，六大基础人格任你选择。</p>
+            <a href="./getAPI.md" target="_blank" class="text-sm text-sky-600 underline hover:text-sky-800 mt-1">(戳我免费API获取教程体验完整功能)</a>
+            <div class="mt-4">
+              <h3 class="text-lg font-bold text-slate-800">Github提交互动</h3>
+              <p class="text-sm text-slate-500 mt-2">程序员专属彩蛋。绑定后，每次检测到新的 commit，宠物都会为你冒出鼓励语。</p>
             </div>
-            <div class="rounded-xl overflow-hidden border border-slate-100 bg-slate-50">
-              <img src="./assets/memo-demo.png"
-                   alt="桌面记事演示"
-                   class="w-full h-auto object-cover"
-                   loading="lazy" />
-            </div>
           </div>
-        </div>
-
-        <!-- B: Focus Mode (1 col, tall) -->
-        <div class="rounded-2xl border border-slate-200 bg-white p-6
-                    shadow-sm hover:shadow-md transition-shadow flex flex-col">
-          <h3 class="text-lg font-semibold text-slate-800">沉浸式专注模式</h3>
-          <p class="mt-2 text-sm text-slate-400 leading-relaxed">
-            5 至 60 分钟自定义番茄钟，专注期间宠物保持安静，到点铃声提醒。
-          </p>
-          <div class="mt-5 flex-1 rounded-xl overflow-hidden border border-slate-100 bg-slate-50">
-            <img src="./assets/pomodoro-demo.png"
-                 alt="专注模式演示"
-                 class="w-full h-auto object-cover"
-                 loading="lazy" />
-          </div>
-        </div>
-
-        <!-- C: AI Persona Chat (spans 2 cols) -->
-        <div class="md:col-span-2 rounded-2xl border border-slate-200 bg-white p-6
-                    shadow-sm hover:shadow-md transition-shadow">
-          <h3 class="text-lg font-semibold text-slate-800">AI 人格与全面觉醒</h3>
-          <p class="mt-2 text-sm text-slate-400 leading-relaxed">
-            内置傲娇猫、毒舌朋友等六大基础人格。填入你的自定义 API Endpoint 与 Key，解锁大模型完全体。
-          </p>
-          <div class="mt-5 rounded-xl overflow-hidden border border-slate-100 bg-slate-50">
-            <img src="./assets/chat-demo.png"
-                 alt="AI 对话演示"
-                 class="w-full h-auto object-cover"
-                 loading="lazy" />
-          </div>
-        </div>
-
-        <!-- D: Audio Awareness (1 col) -->
-        <div class="rounded-2xl border border-slate-200 bg-white p-6
-                    shadow-sm hover:shadow-md transition-shadow">
-          <div class="flex items-center gap-2 mb-2">
-            <span class="inline-block w-2 h-2 rounded-full bg-violet-400"></span>
-            <h3 class="text-lg font-semibold text-slate-800">系统音频感知</h3>
-          </div>
-          <p class="text-sm text-slate-400 leading-relaxed">
-            基于 Windows 底层 WASAPI 峰值检测，随系统音乐跳动音符。
-          </p>
-        </div>
-
-        <!-- E: GitHub Monitor (1 col) -->
-        <div class="rounded-2xl border border-slate-200 bg-white p-6
-                    shadow-sm hover:shadow-md transition-shadow">
-          <div class="flex items-center gap-2 mb-2">
-            <span class="inline-block w-2 h-2 rounded-full bg-amber-400"></span>
-            <h3 class="text-lg font-semibold text-slate-800">GitHub 提交监控</h3>
-          </div>
-          <p class="text-sm text-slate-400 leading-relaxed">
-            程序员专属彩蛋。绑定后，每次检测到新的 commit，宠物都会为你冒出鼓励语。
-          </p>
-        </div>
-
-        <!-- F: System Integration (spans 2 cols) -->
-        <div class="md:col-span-2 rounded-2xl border border-slate-200 bg-white p-6
-                    shadow-sm hover:shadow-md transition-shadow">
-          <div class="flex items-center gap-2 mb-2">
-            <span class="inline-block w-2 h-2 rounded-full bg-teal-400"></span>
-            <h3 class="text-lg font-semibold text-slate-800">系统深度集成</h3>
-          </div>
-          <p class="text-sm text-slate-400 leading-relaxed">
-            开机自启 / 状态持久化置顶 / 拖拽文件到宠物身上直接送入回收站。
-          </p>
         </div>
 
       </div>
@@ -396,83 +753,83 @@
   <!-- ============================================================
        SHOWCASE: Sprite Sheet Animations
        ============================================================ -->
-  <section id="showcase" class="py-20 bg-white">
-    <div class="mx-auto max-w-5xl px-6">
+  <section id="showcase" class="py-20">
+    <div class="mx-auto max-w-7xl px-6">
 
       <div class="text-center mb-14">
         <h2 class="text-3xl sm:text-4xl font-bold text-slate-900">动作展示</h2>
-        <p class="mt-4 text-slate-400">七种内置动态动作，每一种都有独特的个性表达。</p>
+        <p class="mt-4 text-slate-500">七种内置动态动作，每一种都有独特的个性表达。</p>
       </div>
 
-      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6 justify-items-center">
+      <div class="flex flex-nowrap justify-center gap-3 overflow-x-auto pb-4">
 
         <!-- Row 0: Idle -->
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
-          <div class="bg-grid-pattern flex items-center justify-center p-4 rounded-t-2xl">
-            <div class="sprite-action sprite-idle"></div>
+        <div class="shrink-0 w-[140px] h-[180px] flex flex-col items-center justify-between bg-white/60 backdrop-blur-lg rounded-2xl border border-white/60 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] hover:border-sky-200 transition-all duration-300 group overflow-hidden">
+          <div class="bg-grid-pattern flex items-center justify-center h-[130px] overflow-hidden rounded-t-2xl border-b-2 border-dashed border-slate-100">
+            <div class="sprite-action showcase-sprite sprite-idle"></div>
           </div>
-          <div class="border-t border-slate-100 text-center py-3">
-            <span class="text-sm text-slate-600 font-semibold">待机</span>
+          <div class="relative z-10 text-center py-1.5 px-2">
+            <span class="inline-block px-3 py-1 rounded-full text-xs bg-sky-50 text-sky-800 font-bold">待机</span>
           </div>
         </div>
 
         <!-- Row 1: Walk -->
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
-          <div class="bg-grid-pattern flex items-center justify-center p-4 rounded-t-2xl">
-            <div class="sprite-action sprite-walk"></div>
+        <div class="shrink-0 w-[140px] h-[180px] flex flex-col items-center justify-between bg-white/60 backdrop-blur-lg rounded-2xl border border-white/60 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] hover:border-emerald-200 transition-all duration-300 group overflow-hidden">
+          <div class="bg-grid-pattern flex items-center justify-center h-[130px] overflow-hidden rounded-t-2xl border-b-2 border-dashed border-slate-100">
+            <div class="sprite-action showcase-sprite sprite-walk"></div>
           </div>
-          <div class="border-t border-slate-100 text-center py-3">
-            <span class="text-sm text-slate-600 font-semibold">行走</span>
+          <div class="relative z-10 text-center py-1.5 px-2">
+            <span class="inline-block px-3 py-1 rounded-full text-xs bg-emerald-50 text-emerald-800 font-bold">行走</span>
           </div>
         </div>
 
         <!-- Row 2: Run -->
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
-          <div class="bg-grid-pattern flex items-center justify-center p-4 rounded-t-2xl">
-            <div class="sprite-action sprite-run"></div>
+        <div class="shrink-0 w-[140px] h-[180px] flex flex-col items-center justify-between bg-white/60 backdrop-blur-lg rounded-2xl border border-white/60 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] hover:border-amber-200 transition-all duration-300 group overflow-hidden">
+          <div class="bg-grid-pattern flex items-center justify-center h-[130px] overflow-hidden rounded-t-2xl border-b-2 border-dashed border-slate-100">
+            <div class="sprite-action showcase-sprite sprite-run"></div>
           </div>
-          <div class="border-t border-slate-100 text-center py-3">
-            <span class="text-sm text-slate-600 font-semibold">奔跑</span>
+          <div class="relative z-10 text-center py-1.5 px-2">
+            <span class="inline-block px-3 py-1 rounded-full text-xs bg-amber-50 text-amber-800 font-bold">奔跑</span>
           </div>
         </div>
 
         <!-- Row 3: Sit -->
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
-          <div class="bg-grid-pattern flex items-center justify-center p-4 rounded-t-2xl">
-            <div class="sprite-action sprite-sit"></div>
+        <div class="shrink-0 w-[140px] h-[180px] flex flex-col items-center justify-between bg-white/60 backdrop-blur-lg rounded-2xl border border-white/60 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] hover:border-violet-200 transition-all duration-300 group overflow-hidden">
+          <div class="bg-grid-pattern flex items-center justify-center h-[130px] overflow-hidden rounded-t-2xl border-b-2 border-dashed border-slate-100">
+            <div class="sprite-action showcase-sprite sprite-sit"></div>
           </div>
-          <div class="border-t border-slate-100 text-center py-3">
-            <span class="text-sm text-slate-600 font-semibold">坐下</span>
+          <div class="relative z-10 text-center py-1.5 px-2">
+            <span class="inline-block px-3 py-1 rounded-full text-xs bg-violet-50 text-violet-800 font-bold">坐下</span>
           </div>
         </div>
 
         <!-- Row 4: Sleep -->
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
-          <div class="bg-grid-pattern flex items-center justify-center p-4 rounded-t-2xl">
-            <div class="sprite-action sprite-sleep"></div>
+        <div class="shrink-0 w-[140px] h-[180px] flex flex-col items-center justify-between bg-white/60 backdrop-blur-lg rounded-2xl border border-white/60 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] hover:border-indigo-200 transition-all duration-300 group overflow-hidden">
+          <div class="bg-grid-pattern flex items-center justify-center h-[130px] overflow-hidden rounded-t-2xl border-b-2 border-dashed border-slate-100">
+            <div class="sprite-action showcase-sprite sprite-sleep"></div>
           </div>
-          <div class="border-t border-slate-100 text-center py-3">
-            <span class="text-sm text-slate-600 font-semibold">睡觉</span>
+          <div class="relative z-10 text-center py-1.5 px-2">
+            <span class="inline-block px-3 py-1 rounded-full text-xs bg-indigo-50 text-indigo-800 font-bold">睡觉</span>
           </div>
         </div>
 
         <!-- Row 5: Greet -->
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
-          <div class="bg-grid-pattern flex items-center justify-center p-4 rounded-t-2xl">
-            <div class="sprite-action sprite-greet"></div>
+        <div class="shrink-0 w-[140px] h-[180px] flex flex-col items-center justify-between bg-white/60 backdrop-blur-lg rounded-2xl border border-white/60 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] hover:border-rose-200 transition-all duration-300 group overflow-hidden">
+          <div class="bg-grid-pattern flex items-center justify-center h-[130px] overflow-hidden rounded-t-2xl border-b-2 border-dashed border-slate-100">
+            <div class="sprite-action showcase-sprite sprite-greet"></div>
           </div>
-          <div class="border-t border-slate-100 text-center py-3">
-            <span class="text-sm text-slate-600 font-semibold">打招呼</span>
+          <div class="relative z-10 text-center py-1.5 px-2">
+            <span class="inline-block px-3 py-1 rounded-full text-xs bg-rose-50 text-rose-800 font-bold">打招呼</span>
           </div>
         </div>
 
         <!-- Row 6: Play -->
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
-          <div class="bg-grid-pattern flex items-center justify-center p-4 rounded-t-2xl">
-            <div class="sprite-action sprite-play"></div>
+        <div class="shrink-0 w-[140px] h-[180px] flex flex-col items-center justify-between bg-white/60 backdrop-blur-lg rounded-2xl border border-white/60 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] hover:border-teal-200 transition-all duration-300 group overflow-hidden">
+          <div class="bg-grid-pattern flex items-center justify-center h-[130px] overflow-hidden rounded-t-2xl border-b-2 border-dashed border-slate-100">
+            <div class="sprite-action showcase-sprite sprite-play"></div>
           </div>
-          <div class="border-t border-slate-100 text-center py-3">
-            <span class="text-sm text-slate-600 font-semibold">玩耍</span>
+          <div class="relative z-10 text-center py-1.5 px-2">
+            <span class="inline-block px-3 py-1 rounded-full text-xs bg-teal-50 text-teal-800 font-bold">玩耍</span>
           </div>
         </div>
 
@@ -482,46 +839,51 @@
 
 
   <!-- ============================================================
+       RIGHT-CLICK MENU SHOWCASE
+       ============================================================ -->
+  <div class="max-w-5xl mx-auto my-16 px-4 flex flex-col items-center">
+    <h2 class="text-2xl font-bold text-slate-800 mb-6 text-center">右键出现丰富菜单栏</h2>
+    <img src="./assets/caidanlan.png" alt="右键菜单栏" class="w-full max-w-4xl rounded-2xl shadow-lg border border-slate-200/60 object-cover">
+  </div>
+
+
+  <!-- ============================================================
        FAQ
        ============================================================ -->
-  <section id="faq" class="py-20 bg-white">
+  <section id="faq" class="py-20">
     <div class="mx-auto max-w-3xl px-6">
 
       <div class="text-center mb-14">
         <h2 class="text-3xl sm:text-4xl font-bold text-slate-900">常见问题</h2>
       </div>
 
-      <div class="space-y-0">
+      <div>
 
         <!-- Q1 -->
-        <div class="border-b border-slate-100 py-6">
-          <h3 class="text-base font-semibold text-slate-800">
-            软件收费吗？
-          </h3>
-          <p class="mt-2 text-sm text-slate-400 leading-relaxed">
-            完全免费开源。大模型对话功能由于接入的是你自己的 API Key，所以取决于你使用的模型厂商资费（也完全可以使用免费的 API）。
-          </p>
-        </div>
+        <details open class="faq-item">
+          <summary>软件收费吗？</summary>
+          <div class="faq-answer">
+            完全免费开源。基础对话调用的是文心一言海量语录库。大模型对话功能由于接入的是你自己的 API Key，有很多免费的api可以接入。戳这里看教程嘻嘻。
+          </div>
+        </details>
 
         <!-- Q2 -->
-        <div class="border-b border-slate-100 py-6">
-          <h3 class="text-base font-semibold text-slate-800">
-            支持 Mac 或 Linux 吗？
-          </h3>
-          <p class="mt-2 text-sm text-slate-400 leading-relaxed">
-            暂不提供编译好的安装包。目前主打 Windows 体验，但由于基于 Tauri 框架，你可以克隆源码自行在 Mac 下编译运行。
-          </p>
-        </div>
+        <details open class="faq-item">
+          <summary>支持 Mac 或 Linux 吗？</summary>
+          <div class="faq-answer">
+            目前主打 Windows 体验，但由于基于 Tauri 框架，你可以克隆源码自行在 Mac 下编译运行。
+            因为主包对Mac和Linux不熟悉，所以暂时没有提供官方安装包。欢迎朋友贡献跨平台版本！
+            可以通过我的抖音联系我dy1nrbj3gm4gd或者直接提交 PR！
+          </div>
+        </details>
 
         <!-- Q3 -->
-        <div class="border-b border-slate-100 py-6">
-          <h3 class="text-base font-semibold text-slate-800">
-            怎么更换自己喜欢的宠物？
-          </h3>
-          <p class="mt-2 text-sm text-slate-400 leading-relaxed">
-            在网页上方前往开源社区下载 <code class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-xs">.zip</code> 格式的宠物包，右键点击桌面上的宠物，进入设置，导入宠物即可。
-          </p>
-        </div>
+        <details open class="faq-item">
+          <summary>怎么更换自己喜欢的宠物？</summary>
+          <div class="faq-answer">
+            在网页上方前往开源社区下载 <code class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-xs">.zip</code> 格式的宠物包，右键点击桌面上的宠物，进入设置，导入宠物即可。<a href="./daorujiaocheng.md" target="_blank" class="underline text-sky-600 hover:text-sky-800">戳这里直达教程</a>
+          </div>
+        </details>
 
       </div>
     </div>
@@ -531,12 +893,12 @@
   <!-- ============================================================
        FOOTER
        ============================================================ -->
-  <footer class="border-t border-slate-200 bg-white">
+  <footer class="border-t border-slate-200">
     <div class="mx-auto max-w-6xl px-6 py-10 flex flex-col sm:flex-row
-                items-center justify-between gap-4 text-sm text-slate-400">
+                items-center justify-between gap-4 text-[0.9375rem] text-slate-500">
       <span>VibePet &mdash; MIT License</span>
       <div class="flex items-center gap-6">
-        <a href="https://github.com" target="_blank" rel="noopener"
+        <a href="https://github.com/Muxinlucky/DesktopPet" target="_blank" rel="noopener"
            class="hover:text-slate-600 transition-colors">GitHub</a>
         <a href="#hero" class="hover:text-slate-600 transition-colors">回到顶部</a>
       </div>
@@ -579,6 +941,34 @@
           }, 300);
         });
       }
+    })();
+  </script>
+
+  <!-- ============================================================
+       GITHUB RELEASES DOWNLOAD COUNT
+       ============================================================ -->
+  <script>
+    (function () {
+      var el = document.getElementById('nav-download-count');
+      if (!el) return;
+      fetch('https://api.github.com/repos/Muxinlucky/DesktopPet/releases')
+        .then(function (res) { return res.json(); })
+        .then(function (releases) {
+          var total = 0;
+          if (Array.isArray(releases)) {
+            releases.forEach(function (r) {
+              if (r && Array.isArray(r.assets)) {
+                r.assets.forEach(function (a) {
+                  total += (a.download_count || 0);
+                });
+              }
+            });
+          }
+          el.innerText = total > 0 ? total.toLocaleString() : '50+';
+        })
+        .catch(function () {
+          el.innerText = '50+';
+        });
     })();
   </script>
 
