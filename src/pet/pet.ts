@@ -223,6 +223,8 @@ let isFocusMode = false;
 let focusEndTime = 0;
 let focusDurationMs = 0;
 let focusIntervalId: ReturnType<typeof setInterval> | null = null;
+let isMeritMode = false;
+let meritIntervalId: ReturnType<typeof setInterval> | null = null;
 let lastPetInteractionTime = 0;
 let isPetHovered = false;
 let isPetMenuOpen = false;
@@ -247,6 +249,11 @@ const LS_TODOS = "pet_todos";
 const LS_PRIMARY_PET_ID = "pet_primary_project_id";
 const LS_FOCUS_MINUTES = "pet_focus_minutes";
 const LS_SUMMONED_PET_IDS = "pet_summoned_pet_ids";
+const LS_MERIT_TEXT = "pet_merit_text";
+const LS_MERIT_COUNT = "pet_merit_count";
+const LS_MERIT_ENABLED = "pet_merit_enabled";
+const MERIT_DEFAULT_TEXT = "功德";
+const MERIT_HIT_INTERVAL_MS = 1600;
 let apiKeyMigrationWarned = false;
 
 function isTauriRuntime(): boolean {
@@ -468,6 +475,7 @@ function clearFocusTimer(): void {
 }
 
 function startFocusMode(minutes: number, engine: PetEngine): void {
+  if (isMeritMode) endMeritMode(engine, false);
   const duration = Math.min(240, Math.max(1, Math.round(minutes)));
   localStorage.setItem(LS_FOCUS_MINUTES, String(duration));
   clearFocusTimer();
@@ -521,7 +529,7 @@ function endFocusMode(engine: PetEngine, completed: boolean): void {
   showSpeech(completed ? "专注结束，辛苦啦！" : "已退出专注模式", 3200);
   if (completed) {
     window.setTimeout(() => {
-      if (!isExiting && !isFocusMode) engine.applyState("idle");
+      if (!isExiting && !isFocusMode && !isMeritMode) engine.applyState("idle");
     }, 1800);
   }
 }
@@ -586,6 +594,164 @@ function positionFocusPanel(panel: HTMLElement): void {
   panel.style.left = `${Math.round(left)}px`;
   panel.style.top = `${Math.round(top)}px`;
   panel.style.visibility = "";
+}
+
+function normalizeMeritText(value: string | null): string {
+  const text = (value || "").trim();
+  return text.length > 0 ? text.slice(0, 12) : MERIT_DEFAULT_TEXT;
+}
+
+function getMeritText(): string {
+  return normalizeMeritText(localStorage.getItem(LS_MERIT_TEXT) || MERIT_DEFAULT_TEXT);
+}
+
+function getMeritCount(): number {
+  const count = Number(localStorage.getItem(LS_MERIT_COUNT) || "0");
+  return Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0;
+}
+
+function setMeritCount(count: number): void {
+  localStorage.setItem(LS_MERIT_COUNT, String(Math.max(0, Math.floor(count))));
+}
+
+function updateMeritPanelState(): void {
+  const label = document.getElementById("merit-state-label");
+  const count = document.getElementById("merit-count-text");
+  const input = document.getElementById("merit-text-input") as HTMLInputElement | null;
+  if (label) label.textContent = isMeritMode ? "木鱼敲击中" : "准备敲木鱼";
+  if (count) count.textContent = `今日 ${getMeritCount()} 次`;
+  if (input && document.activeElement !== input) input.value = getMeritText();
+}
+
+function triggerMeritHit(engine: PetEngine): void {
+  const container = document.getElementById("pet-container");
+  const text = getMeritText();
+  setMeritCount(getMeritCount() + 1);
+  updateMeritPanelState();
+  if (container) {
+    container.classList.remove("merit-hit");
+    void container.offsetWidth;
+    container.classList.add("merit-hit");
+    window.setTimeout(() => container.classList.remove("merit-hit"), 260);
+  }
+  if (engine.currentState !== "review") engine.applyState("review");
+  playSound("bell");
+  showSpeech(`${text} +1`, 900);
+}
+
+function clearMeritTimer(): void {
+  if (meritIntervalId) {
+    clearInterval(meritIntervalId);
+    meritIntervalId = null;
+  }
+}
+
+function startMeritMode(engine: PetEngine): void {
+  if (isFocusMode) endFocusMode(engine, false);
+  clearMeritTimer();
+  const container = document.getElementById("pet-container");
+  const text = getMeritText();
+  localStorage.setItem(LS_MERIT_TEXT, text);
+  localStorage.setItem(LS_MERIT_ENABLED, "true");
+  isMeritMode = true;
+  if (manualDragFrame !== null) {
+    window.cancelAnimationFrame(manualDragFrame);
+    manualDragFrame = null;
+  }
+  isMouseDown = false;
+  hasStartedDragging = false;
+  isDraggingInProgress = false;
+  lastPetInteractionTime = Date.now();
+  lastActivityTime = Date.now();
+  container?.classList.add("merit-active");
+  engine.applyState("review");
+  updateMeritPanelState();
+  showSpeech(`${text}模式开始`, 1800);
+  triggerMeritHit(engine);
+  meritIntervalId = setInterval(() => {
+    if (!isMeritMode) return;
+    triggerMeritHit(engine);
+  }, MERIT_HIT_INTERVAL_MS);
+}
+
+function endMeritMode(engine: PetEngine, announce = true): void {
+  const wasMeritMode = isMeritMode;
+  clearMeritTimer();
+  isMeritMode = false;
+  localStorage.setItem(LS_MERIT_ENABLED, "false");
+  document.getElementById("pet-container")?.classList.remove("merit-active", "merit-hit");
+  updateMeritPanelState();
+  lastPetInteractionTime = Date.now();
+  lastActivityTime = Date.now();
+  if (!wasMeritMode) return;
+  engine.applyState("idle");
+  if (announce) showSpeech("功德模式已停止", 1800);
+}
+
+function showMeritPanel(): void {
+  const panel = document.getElementById("merit-panel") as HTMLElement | null;
+  const input = document.getElementById("merit-text-input") as HTMLInputElement | null;
+  if (!panel || !input) return;
+  input.value = getMeritText();
+  updateMeritPanelState();
+  positionFocusPanel(panel);
+  isPetPanelOpen = true;
+  lastPetInteractionTime = Date.now();
+}
+
+function setupMeritPanel(engine: PetEngine): void {
+  const panel = document.getElementById("merit-panel") as HTMLElement | null;
+  const input = document.getElementById("merit-text-input") as HTMLInputElement | null;
+  const startBtn = document.getElementById("merit-start") as HTMLButtonElement | null;
+  const stopBtn = document.getElementById("merit-stop") as HTMLButtonElement | null;
+  if (!panel || !input || !startBtn || !stopBtn) return;
+
+  input.value = getMeritText();
+  updateMeritPanelState();
+
+  input.addEventListener("input", () => {
+    const text = normalizeMeritText(input.value);
+    localStorage.setItem(LS_MERIT_TEXT, text);
+    lastPetInteractionTime = Date.now();
+  });
+
+  input.addEventListener("change", () => {
+    input.value = getMeritText();
+  });
+
+  startBtn.addEventListener("click", () => {
+    input.value = normalizeMeritText(input.value);
+    localStorage.setItem(LS_MERIT_TEXT, input.value);
+    startMeritMode(engine);
+    panel.style.display = "none";
+    isPetPanelOpen = false;
+  });
+
+  stopBtn.addEventListener("click", () => {
+    endMeritMode(engine);
+    panel.style.display = "none";
+    isPetPanelOpen = false;
+  });
+
+  panel.addEventListener("mouseenter", () => {
+    isPetPanelOpen = true;
+    lastPetInteractionTime = Date.now();
+  });
+
+  window.addEventListener("pointerdown", (event) => {
+    if (panel.style.display === "none") return;
+    const target = event.target as Node | null;
+    const hitbox = document.getElementById("pet-hitbox");
+    if (target && (panel.contains(target) || hitbox?.contains(target))) return;
+    panel.style.display = "none";
+    isPetPanelOpen = false;
+  });
+
+  window.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || panel.style.display === "none") return;
+    panel.style.display = "none";
+    isPetPanelOpen = false;
+  });
 }
 
 function setupFocusPanel(engine: PetEngine): void {
@@ -1535,6 +1701,7 @@ function isBlockingPetPanelOpen(): boolean {
     "volume-panel",
     "size-panel",
     "focus-panel",
+    "merit-panel",
     "api-settings-panel",
     "custom-persona-panel",
     "github-settings-panel",
@@ -1555,6 +1722,7 @@ function isPointOverInteractivePetArea(x: number, y: number): boolean {
     "volume-panel",
     "size-panel",
     "focus-panel",
+    "merit-panel",
     "api-settings-panel",
     "custom-persona-panel",
     "github-settings-panel",
@@ -1729,6 +1897,7 @@ function canAutoRoam(): boolean {
     && !isPetPanelOpen
     && !isBlockingPetPanelOpen()
     && !isFocusMode
+    && !isMeritMode
     && !isPetHovered
     && Date.now() - lastPetInteractionTime >= ROAM_IDLE_DELAY_MS;
 }
@@ -1741,6 +1910,7 @@ function shouldFreezeRoamPhysics(state: RoamState): boolean {
   const recentlyDragged = Date.now() - lastDragEndTime < 900;
   return isExiting
     || isFocusMode
+    || isMeritMode
     || isManualPetControlActive()
     || isPetMenuOpen
     || isPetPanelOpen
@@ -2025,7 +2195,7 @@ async function tickIdleRoaming(engine: PetEngine, state: RoamState, now: number)
     if (shouldSyncWindow) await syncRoamStateFromWindow(engine, state, false);
     state.vx = 0;
     state.nextDecisionAt = now + 500;
-    if (state.grounded) setRoamAction(engine, state, "idle");
+    if (state.grounded) setRoamAction(engine, state, isMeritMode || isFocusMode ? "review" : "idle");
     return;
   }
 
@@ -2318,9 +2488,10 @@ async function setupContextMenu(engine: PetEngine): Promise<void> {
   const managerButton = document.getElementById("context-manager") as HTMLButtonElement | null;
   const todoButton = document.getElementById("context-todo") as HTMLButtonElement | null;
   const focusButton = document.getElementById("context-focus") as HTMLButtonElement | null;
+  const meritButton = document.getElementById("context-merit") as HTMLButtonElement | null;
   const recallButton = document.getElementById("context-recall") as HTMLButtonElement | null;
   const quitButton = document.getElementById("context-quit") as HTMLButtonElement | null;
-  if (!hitbox || !menu || !managerButton || !todoButton || !focusButton || !recallButton || !quitButton) return;
+  if (!hitbox || !menu || !managerButton || !todoButton || !focusButton || !meritButton || !recallButton || !quitButton) return;
 
   // Apply persisted always-on-top state on startup
   await appWindow.setAlwaysOnTop(isAlwaysOnTop);
@@ -2379,7 +2550,7 @@ async function setupContextMenu(engine: PetEngine): Promise<void> {
 
   const showMenu = async (): Promise<void> => {
     isPetMenuOpen = true;
-    engine.applyState("idle");
+    if (!isMeritMode) engine.applyState("idle");
     lastActivityTime = Date.now();
     lastPetInteractionTime = Date.now();
     await updateRecallVisibility();
@@ -2417,6 +2588,11 @@ async function setupContextMenu(engine: PetEngine): Promise<void> {
   focusButton.addEventListener("click", () => {
     hideMenu();
     showFocusPanel();
+  });
+
+  meritButton.addEventListener("click", () => {
+    hideMenu();
+    showMeritPanel();
   });
 
   recallButton.addEventListener("click", () => {
@@ -2495,7 +2671,7 @@ function setupBioClock(engine: PetEngine): void {
   let lastNightHour = -1;
 
   setInterval(() => {
-    if (isExiting || isMouseDown || hasStartedDragging || isFocusMode) return;
+    if (isExiting || isMouseDown || hasStartedDragging || isFocusMode || isMeritMode) return;
 
     // 23:00 late night trigger
     const now = new Date();
@@ -2516,7 +2692,7 @@ function setupBioClock(engine: PetEngine): void {
     } else if (state === "idle" && elapsed > 300_000) {
       engine.applyState("review");
       setTimeout(() => {
-        if (!isExiting && engine.currentState === "review") {
+        if (!isExiting && !isMeritMode && engine.currentState === "review") {
           engine.applyState("idle");
           lastActivityTime = Date.now();
         }
@@ -2532,7 +2708,7 @@ function setupWakeUp(engine: PetEngine): void {
   if (!hitbox) return;
 
   hitbox.addEventListener("mouseenter", () => {
-    if (isExiting || isFocusMode) return;
+    if (isExiting || isFocusMode || isMeritMode) return;
     const state = engine.currentState;
     if (state === "waiting" || state === "review") {
       engine.applyState("jumping");
@@ -2671,6 +2847,10 @@ async function main(): Promise<void> {
   if (localStorage.getItem(LS_CHAT_MODE) === null) {
     localStorage.setItem(LS_CHAT_MODE, "basic");
   }
+  if (localStorage.getItem(LS_MERIT_TEXT) === null) {
+    localStorage.setItem(LS_MERIT_TEXT, MERIT_DEFAULT_TEXT);
+  }
+  localStorage.setItem(LS_MERIT_ENABLED, "false");
 
   const spriteEl = document.getElementById("pet-sprite");
   if (!spriteEl) {
@@ -2701,6 +2881,7 @@ async function main(): Promise<void> {
   setupVolumePanel();
   setupSizePanel();
   setupFocusPanel(engine);
+  setupMeritPanel(engine);
   setupApiSettingsPanel();
   setupCustomPersonaPanel();
   setupGitHubSettingsPanel();

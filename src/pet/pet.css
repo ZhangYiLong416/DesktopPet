@@ -44,6 +44,105 @@ html, body {
   filter: url(#remove-fringe);
 }
 
+#merit-woodfish {
+  position: absolute;
+  right: -18px;
+  bottom: 18px;
+  width: 68px;
+  height: 58px;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(8px) scale(0.92);
+  transition: opacity 180ms ease, transform 180ms ease;
+  z-index: 2;
+}
+
+#pet-container.merit-active #merit-woodfish {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.woodfish-body {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 54px;
+  height: 38px;
+  border-radius: 48% 48% 42% 42%;
+  background:
+    radial-gradient(circle at 36% 34%, rgba(255, 236, 183, 0.95) 0 9%, transparent 10%),
+    radial-gradient(circle at 52% 60%, #7c3f18 0 34%, transparent 35%),
+    linear-gradient(145deg, #b96a27, #5b2d14);
+  box-shadow:
+    inset 0 5px 9px rgba(255, 223, 160, 0.32),
+    inset 0 -7px 11px rgba(40, 16, 4, 0.45),
+    0 8px 16px rgba(0, 0, 0, 0.26);
+}
+
+.woodfish-body::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 8px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(45, 21, 9, 0.36);
+}
+
+.woodfish-body::after {
+  content: "";
+  position: absolute;
+  right: 9px;
+  top: 12px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(35, 15, 6, 0.48);
+}
+
+.woodfish-mallet {
+  position: absolute;
+  left: 8px;
+  top: 0;
+  width: 46px;
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f3d49a, #8f5424);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.28);
+  transform: rotate(-24deg);
+  transform-origin: 80% 50%;
+}
+
+.woodfish-mallet::before {
+  content: "";
+  position: absolute;
+  left: -7px;
+  top: -4px;
+  width: 16px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #f5c16a, #8b4b1c);
+}
+
+#pet-container.merit-hit .woodfish-body {
+  animation: woodfish-hit-body 220ms ease;
+}
+
+#pet-container.merit-hit .woodfish-mallet {
+  animation: woodfish-hit-mallet 220ms ease;
+}
+
+@keyframes woodfish-hit-body {
+  0%, 100% { transform: scale(1); }
+  45% { transform: scale(0.94, 1.06); }
+}
+
+@keyframes woodfish-hit-mallet {
+  0%, 100% { transform: rotate(-24deg); }
+  45% { transform: rotate(-49deg) translate(-2px, 5px); }
+}
+
 #pet-hitbox {
   position: absolute;
   left: 50%;
@@ -729,7 +828,8 @@ html, body {
 /* ── Todo Panel (Neon Geek) ── */
 
 #todo-panel,
-#focus-panel {
+#focus-panel,
+#merit-panel {
   position: fixed;
   top: 12px;
   left: 12px;
@@ -751,29 +851,34 @@ html, body {
   pointer-events: auto;
 }
 
-#focus-panel {
+#focus-panel,
+#merit-panel {
   max-width: min(320px, calc(100vw - 24px));
   overflow: visible;
 }
 
 #todo-panel::-webkit-scrollbar,
-#focus-panel::-webkit-scrollbar {
+#focus-panel::-webkit-scrollbar,
+#merit-panel::-webkit-scrollbar {
   width: 6px;
 }
 
 #todo-panel::-webkit-scrollbar-track,
-#focus-panel::-webkit-scrollbar-track {
+#focus-panel::-webkit-scrollbar-track,
+#merit-panel::-webkit-scrollbar-track {
   background: transparent;
 }
 
 #todo-panel::-webkit-scrollbar-thumb,
-#focus-panel::-webkit-scrollbar-thumb {
+#focus-panel::-webkit-scrollbar-thumb,
+#merit-panel::-webkit-scrollbar-thumb {
   background: rgba(52, 211, 153, 0.4);
   border-radius: 4px;
 }
 
 #todo-panel::-webkit-scrollbar-thumb:hover,
-#focus-panel::-webkit-scrollbar-thumb:hover {
+#focus-panel::-webkit-scrollbar-thumb:hover,
+#merit-panel::-webkit-scrollbar-thumb:hover {
   background: rgba(52, 211, 153, 0.8);
 }
 
@@ -1088,6 +1193,147 @@ html, body {
   border-radius: 8px;
   font: 800 12px/1 "Cascadia Code", "Fira Code", "Consolas", monospace;
   letter-spacing: 0;
+}
+
+/* ── Merit Panel ── */
+
+#merit-panel {
+  width: min(248px, calc(100vw - 16px));
+  max-width: calc(100vw - 24px);
+  padding: 12px;
+  overflow: visible;
+  border-color: rgba(245, 158, 11, 0.42);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(40, 31, 20, 0.97), rgba(21, 16, 12, 0.97));
+  box-shadow:
+    0 16px 34px rgba(0, 0, 0, 0.36),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 0 18px rgba(245, 158, 11, 0.14);
+}
+
+.merit-panel-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.merit-panel-title {
+  color: #fff7ed;
+  font: 800 14px/1.2 "Segoe UI", system-ui, sans-serif;
+  letter-spacing: 0;
+}
+
+#merit-state-label {
+  margin-top: 4px;
+  color: rgba(255, 247, 237, 0.58);
+  font: 700 11px/1.2 "Segoe UI", system-ui, sans-serif;
+  letter-spacing: 0;
+}
+
+.merit-mini-woodfish {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(251, 191, 36, 0.36);
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at 58% 60%, #9a541f 0 28%, transparent 29%),
+    linear-gradient(135deg, rgba(251, 191, 36, 0.24), rgba(146, 64, 14, 0.22));
+  box-shadow: inset 0 0 14px rgba(251, 191, 36, 0.16);
+}
+
+.merit-count-card {
+  margin-bottom: 8px;
+  padding: 10px;
+  border: 1px solid rgba(251, 191, 36, 0.2);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.26);
+}
+
+#merit-count-text {
+  color: #fde68a;
+  font: 800 20px/1 "Cascadia Code", "Fira Code", "Consolas", monospace;
+  letter-spacing: 0;
+  text-align: center;
+  text-shadow: 0 0 14px rgba(245, 158, 11, 0.28);
+}
+
+.merit-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 0 8px;
+  border: 1px solid rgba(251, 191, 36, 0.22);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+#merit-text-input {
+  min-width: 0;
+  height: 30px;
+  flex: 1;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #ffffff;
+  font: 800 14px/1 "Segoe UI", system-ui, sans-serif;
+}
+
+#merit-text-input:focus {
+  box-shadow: none;
+}
+
+.merit-input-wrap:focus-within {
+  border-color: rgba(245, 158, 11, 0.68);
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.18);
+}
+
+.merit-input-wrap span {
+  color: rgba(255, 247, 237, 0.58);
+  font: 800 12px/1 "Segoe UI", system-ui, sans-serif;
+}
+
+.merit-action-row {
+  display: grid;
+  grid-template-columns: 1fr 58px;
+  gap: 6px;
+}
+
+#merit-start,
+#merit-stop {
+  height: 31px;
+  border-radius: 8px;
+  cursor: pointer;
+  font: 800 12px/1 "Segoe UI", system-ui, sans-serif;
+  letter-spacing: 0;
+}
+
+#merit-start {
+  border: 0;
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  color: #201006;
+}
+
+#merit-start:hover {
+  background: linear-gradient(135deg, #fde047, #f59e0b);
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.34);
+}
+
+#merit-stop {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.78);
+}
+
+#merit-stop:hover {
+  border-color: rgba(251, 191, 36, 0.42);
+  color: #ffffff;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.18);
 }
 
 #todo-list {

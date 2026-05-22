@@ -18,6 +18,10 @@
     <div id="pet-container">
       <div id="pet-speech-bubble"><span class="bubble-text"></span></div>
       <div id="pet-sprite"></div>
+      <div id="merit-woodfish" aria-hidden="true">
+        <div class="woodfish-body"></div>
+        <div class="woodfish-mallet"></div>
+      </div>
       <div id="pet-hitbox"></div>
     </div>
     <div id="pet-context-menu" class="pet-context-menu" aria-hidden="true">
@@ -32,6 +36,10 @@
       <button id="context-focus" class="context-menu-item" type="button">
         <span class="context-icon">◷</span>
         <span>专注模式</span>
+      </button>
+      <button id="context-merit" class="context-menu-item" type="button">
+        <span class="context-icon">木</span>
+        <span>功德模式</span>
       </button>
       <button id="context-recall" class="context-menu-item" type="button">
         <span class="context-icon">↩</span>
@@ -93,6 +101,26 @@
       <div class="focus-action-row">
         <button id="focus-start" type="button">开始专注</button>
         <button id="focus-stop" type="button">STOP</button>
+      </div>
+    </div>
+    <div id="merit-panel" style="display: none;">
+      <div class="merit-panel-top">
+        <div>
+          <div class="merit-panel-title">功德模式</div>
+          <div id="merit-state-label">准备敲木鱼</div>
+        </div>
+        <div class="merit-mini-woodfish" aria-hidden="true"></div>
+      </div>
+      <div class="merit-count-card">
+        <div id="merit-count-text">今日 0 次</div>
+      </div>
+      <label class="merit-input-wrap">
+        <input type="text" id="merit-text-input" maxlength="12" value="功德" spellcheck="false" autocomplete="off">
+        <span>+1</span>
+      </label>
+      <div class="merit-action-row">
+        <button id="merit-start" type="button">开始</button>
+        <button id="merit-stop" type="button">停止</button>
       </div>
     </div>
     <div id="api-settings-panel" style="display: none;">
