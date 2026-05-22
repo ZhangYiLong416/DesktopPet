@@ -95,7 +95,6 @@ fn summon_pet_window(app: tauri::AppHandle, pet_id: String) -> Result<String, St
             )
             .title("VibePet")
             .inner_size(192.0, 256.0)
-            .transparent(true)
             .decorations(false)
             .shadow(false)
             .always_on_top(true)
