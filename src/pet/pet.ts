@@ -60,6 +60,7 @@ const sfx = {
   bubble: new Audio(new URL("../assets/audio/bubble.mp3", import.meta.url).href),
   bell: new Audio(new URL("../assets/audio/bell.mp3", import.meta.url).href),
   crunch: new Audio(new URL("../assets/audio/crunch.mp3", import.meta.url).href),
+  woodfish: new Audio(new URL("../assets/audio/woodfish-hit.mp3", import.meta.url).href),
 };
 
 function getPetVolumePercent(): number {
@@ -635,8 +636,8 @@ function triggerMeritHit(engine: PetEngine): void {
     window.setTimeout(() => container.classList.remove("merit-hit"), 260);
   }
   if (engine.currentState !== "review") engine.applyState("review");
-  playSound("bell");
-  showSpeech(`${text} +1`, 900);
+  playSound("woodfish");
+  showSpeech(`${text} +1`, 900, false);
 }
 
 function clearMeritTimer(): void {
@@ -2776,14 +2777,14 @@ function checkSpecialDayAndTime(): string {
   return "今天也要开心哦！";
 }
 
-function showSpeech(text: string, durationMs: number): void {
+function showSpeech(text: string, durationMs: number, withSound = true): void {
   const bubble = document.getElementById("pet-speech-bubble");
   const bubbleText = bubble?.querySelector(".bubble-text") as HTMLElement | null;
   if (!bubble || !bubbleText || !text) return;
 
   bubbleText.textContent = text;
   bubble.classList.add("show-bubble");
-  playSound("bubble");
+  if (withSound) playSound("bubble");
 
   setTimeout(() => {
     bubble.classList.remove("show-bubble");
