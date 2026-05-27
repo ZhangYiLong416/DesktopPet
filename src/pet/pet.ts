@@ -28,7 +28,11 @@ interface PetManifest {
   spritesheetPath: string;
   kind?: string;
   version?: string;
+  animations?: Record<string, FrameAnimation>;
 }
+
+type MusicRhythmSyncMode = "independent" | "aligned";
+type FrameEvents = Record<number, () => void>;
 
 // ── Codex Pet Standard Atlas (8x9, 192x208 per cell) ──
 
@@ -50,7 +54,15 @@ const CODEX_ATLAS: PetAtlas = {
   },
 };
 
+const MODE_ANIMATION_PRESETS: Record<string, FrameAnimation> = {
+  merit: { row: 9, frames: 4, frameDurations: [150, 150, 150, 300] },
+  focus: { row: 10, frames: 4, frameDurations: [300, 300, 360, 300] },
+  music: { row: 11, frames: 8, frameDurations: [140, 140, 140, 140, 140, 140, 180, 240] },
+};
+
 // ── Audio SFX (HTML5 Audio, no external libs) ──
+
+const LS_PET_VOLUME = "pet-volume";
 
 const sfx = {
   pop: new Audio(new URL("../assets/audio/pop.mp3", import.meta.url).href),
@@ -58,11 +70,22 @@ const sfx = {
   bubble: new Audio(new URL("../assets/audio/bubble.mp3", import.meta.url).href),
   bell: new Audio(new URL("../assets/audio/bell.mp3", import.meta.url).href),
   crunch: new Audio(new URL("../assets/audio/crunch.mp3", import.meta.url).href),
+  woodfish: new Audio(new URL("../assets/audio/woodfish-hit.mp3", import.meta.url).href),
 };
 
-Object.values(sfx).forEach((audio) => {
-  audio.volume = 0.6;
-});
+function getPetVolumePercent(): number {
+  const saved = Number(localStorage.getItem(LS_PET_VOLUME) || "60");
+  return Number.isFinite(saved) ? Math.min(100, Math.max(0, saved)) : 60;
+}
+
+function applyPetVolume(percent: number): void {
+  const level = Math.min(100, Math.max(0, percent)) / 100;
+  Object.values(sfx).forEach((audio) => {
+    audio.volume = level;
+  });
+}
+
+applyPetVolume(getPetVolumePercent());
 
 function playSound(type: keyof typeof sfx): void {
   const audio = sfx[type];
@@ -87,8 +110,17 @@ class PetEngine {
     this.spriteEl.style.height = `${atlas.cellHeight}px`;
     this.spriteEl.style.backgroundImage = `url("${spritesheetUrl}")`;
     this.spriteEl.style.backgroundRepeat = "no-repeat";
+    this.inferAtlasFromSpritesheet(spritesheetUrl);
 
     this.applyState("idle");
+  }
+
+  hasState(state: string): boolean {
+    return Boolean(this.atlas.animations[state]);
+  }
+
+  frameCount(state: string): number {
+    return this.atlas.animations[state]?.frames ?? 0;
   }
 
   applyState(state: string): void {
@@ -101,8 +133,8 @@ class PetEngine {
 
     this.stop();
     this.currentState = state;
-    this.currentFrame = 0;
-    this.showFrame(0);
+    this.currentFrame = this.alignedFrameIndex(anim);
+    this.showFrame(this.currentFrame);
     this.startLoop();
   }
 
@@ -116,13 +148,68 @@ class PetEngine {
   private startLoop(): void {
     const anim = this.atlas.animations[this.currentState];
     const advance = () => {
+      if (this.shouldUseAlignedMusicFrames()) {
+        this.currentFrame = this.alignedFrameIndex(anim);
+        this.showFrame(this.currentFrame);
+        this.timerHandle = window.setTimeout(advance, this.msUntilNextAlignedFrame(anim));
+        return;
+      }
+
       this.currentFrame = (this.currentFrame + 1) % anim.frames;
       this.showFrame(this.currentFrame);
-      const delay = anim.frameDurations[this.currentFrame];
+      const delay = this.frameDelay(anim, this.currentFrame);
       this.timerHandle = window.setTimeout(advance, delay);
     };
-    const firstDelay = anim.frameDurations[0];
-    this.timerHandle = window.setTimeout(advance, firstDelay);
+    this.timerHandle = window.setTimeout(
+      advance,
+      this.shouldUseAlignedMusicFrames() ? this.msUntilNextAlignedFrame(anim) : this.frameDelay(anim, this.currentFrame),
+    );
+  }
+
+  refreshCurrentAnimationTiming(): void {
+    if (this.currentState !== "music") return;
+    this.stop();
+    const anim = this.atlas.animations[this.currentState];
+    this.currentFrame = this.alignedFrameIndex(anim);
+    this.showFrame(this.currentFrame);
+    this.startLoop();
+  }
+
+  private shouldUseAlignedMusicFrames(): boolean {
+    return this.currentState === "music" && getMusicRhythmSyncMode() === "aligned";
+  }
+
+  private animationCycleDuration(anim: FrameAnimation): number {
+    return Array.from({ length: anim.frames }, (_, index) => this.frameDelay(anim, index))
+      .reduce((sum, delay) => sum + delay, 0);
+  }
+
+  private alignedFrameIndex(anim: FrameAnimation, now = Date.now()): number {
+    if (!this.shouldUseAlignedMusicFrames()) return 0;
+    const cycle = this.animationCycleDuration(anim);
+    if (cycle <= 0) return 0;
+    let elapsed = now % cycle;
+    for (let index = 0; index < anim.frames; index += 1) {
+      elapsed -= this.frameDelay(anim, index);
+      if (elapsed < 0) return index;
+    }
+    return 0;
+  }
+
+  private msUntilNextAlignedFrame(anim: FrameAnimation, now = Date.now()): number {
+    const cycle = this.animationCycleDuration(anim);
+    if (cycle <= 0) return this.frameDelay(anim, this.currentFrame);
+    let elapsed = now % cycle;
+    for (let index = 0; index < anim.frames; index += 1) {
+      const delay = this.frameDelay(anim, index);
+      if (elapsed < delay) return Math.max(16, delay - elapsed);
+      elapsed -= delay;
+    }
+    return 16;
+  }
+
+  private frameDelay(anim: FrameAnimation, index: number): number {
+    return anim.frameDurations[index] ?? anim.frameDurations[anim.frameDurations.length - 1] ?? 150;
   }
 
   private stop(): void {
@@ -134,11 +221,127 @@ class PetEngine {
 
   setSpritesheet(url: string): void {
     this.spriteEl.style.backgroundImage = `url("${url}")`;
-    this.applyState("idle");
+    this.inferAtlasFromSpritesheet(url);
+    if (isMeritMode && this.hasState("merit")) {
+      this.applyState("merit");
+    } else if (isFocusMode && this.hasState("focus")) {
+      this.applyState("focus");
+    } else if (isMusicRhythmMode && this.hasState("music")) {
+      this.applyState("music");
+    } else {
+      this.applyState("idle");
+    }
+  }
+
+  setAtlas(atlas: PetAtlas): void {
+    this.atlas = atlas;
+    this.applyState(this.atlas.animations[this.currentState] ? this.currentState : "idle");
+  }
+
+  playOnce(state: string, fallbackState = "idle", frameEvents: FrameEvents = {}): void {
+    const anim = this.atlas.animations[state];
+    if (!anim) {
+      this.applyState(fallbackState);
+      return;
+    }
+
+    this.stop();
+    this.currentState = state;
+    this.currentFrame = 0;
+    this.showFrame(0);
+    frameEvents[0]?.();
+
+    const advance = () => {
+      this.currentFrame += 1;
+      if (this.currentFrame >= anim.frames) {
+        this.applyState(this.atlas.animations[fallbackState] ? fallbackState : "idle");
+        return;
+      }
+      this.showFrame(this.currentFrame);
+      frameEvents[this.currentFrame]?.();
+      this.timerHandle = window.setTimeout(advance, this.frameDelay(anim, this.currentFrame));
+    };
+    this.timerHandle = window.setTimeout(advance, this.frameDelay(anim, 0));
   }
 
   destroy(): void {
     this.stop();
+  }
+
+  private inferAtlasFromSpritesheet(url: string): void {
+    const image = new Image();
+    image.onload = () => {
+      const rows = Math.floor(image.naturalHeight / this.atlas.cellHeight);
+      const inferredFrameCounts = this.inferFrameCountsByRow(image, rows);
+      const animations = { ...this.atlas.animations };
+
+      for (const [key, preset] of Object.entries(MODE_ANIMATION_PRESETS)) {
+        if (rows > preset.row && !animations[key]) {
+          animations[key] = this.normalizedAnimation(preset, inferredFrameCounts[preset.row]);
+        }
+      }
+
+      for (const [key, animation] of Object.entries(animations)) {
+        animations[key] = this.normalizedAnimation(animation, inferredFrameCounts[animation.row]);
+      }
+
+      this.atlas = {
+        ...this.atlas,
+        rows: Math.max(this.atlas.rows, rows),
+        animations,
+      };
+
+      if (isMeritMode && this.hasState("merit")) {
+        document.getElementById("pet-container")?.classList.remove("merit-active", "merit-hit");
+        this.applyState("merit");
+      } else if (isFocusMode && this.hasState("focus")) {
+        this.applyState("focus");
+      } else if (isMusicRhythmMode && this.hasState("music")) {
+        this.applyState("music");
+      }
+    };
+    image.src = url;
+  }
+
+  private normalizedAnimation(animation: FrameAnimation, inferredFrames = 0): FrameAnimation {
+    const frames = Math.max(1, Math.min(this.atlas.columns, Math.max(animation.frames, inferredFrames)));
+    const frameDurations = Array.from({ length: frames }, (_, index) => this.frameDelay(animation, index));
+    return { ...animation, frames, frameDurations };
+  }
+
+  private inferFrameCountsByRow(image: HTMLImageElement, rows: number): number[] {
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return [];
+      ctx.drawImage(image, 0, 0);
+      const counts: number[] = [];
+      const cols = Math.min(this.atlas.columns, Math.floor(image.naturalWidth / this.atlas.cellWidth));
+      for (let row = 0; row < rows; row += 1) {
+        let lastContentFrame = 0;
+        for (let col = 0; col < cols; col += 1) {
+          const data = ctx.getImageData(
+            col * this.atlas.cellWidth,
+            row * this.atlas.cellHeight,
+            this.atlas.cellWidth,
+            this.atlas.cellHeight,
+          ).data;
+          for (let index = 3; index < data.length; index += 4) {
+            if (data[index] > 12) {
+              lastContentFrame = col + 1;
+              break;
+            }
+          }
+        }
+        counts[row] = lastContentFrame;
+      }
+      return counts;
+    } catch (err) {
+      console.warn("Failed to infer animation frame counts:", err);
+      return [];
+    }
   }
 }
 
@@ -180,6 +383,128 @@ function spawnParticles(x: number, y: number): void {
   }
 }
 
+// ── Music Rhythm Visualizer ──
+
+const LS_MUSIC_RHYTHM_ENABLED = "pet_music_rhythm_enabled";
+const LS_MUSIC_RHYTHM_SYNC_MODE = "pet_music_rhythm_sync_mode";
+const MUSIC_NOTE_CHARS = ["♪", "♫", "♬", "♩"];
+let isMusicRhythmAutoEnabled = localStorage.getItem(LS_MUSIC_RHYTHM_ENABLED) !== "false";
+let isMusicRhythmMode = false;
+let musicRhythmTimerId: number | null = null;
+let musicRhythmPollTimerId: number | null = null;
+let lastSystemAudioPlaying = false;
+
+function getMusicRhythmSyncMode(): MusicRhythmSyncMode {
+  return localStorage.getItem(LS_MUSIC_RHYTHM_SYNC_MODE) === "aligned" ? "aligned" : "independent";
+}
+
+function spawnMusicNote(): void {
+  const container = document.getElementById("pet-container");
+  const rect = container?.getBoundingClientRect();
+  if (!rect) return;
+
+  const note = document.createElement("div");
+  note.className = "music-note";
+  note.textContent = MUSIC_NOTE_CHARS[Math.floor(Math.random() * MUSIC_NOTE_CHARS.length)];
+  note.style.left = `${rect.left + rect.width * (0.42 + Math.random() * 0.28)}px`;
+  note.style.top = `${rect.top + rect.height * (0.16 + Math.random() * 0.22)}px`;
+  note.style.setProperty("--note-drift-x", `${(Math.random() - 0.25) * 58}px`);
+  note.addEventListener("animationend", () => note.remove());
+  document.body.appendChild(note);
+}
+
+function scheduleNextMusicBeat(): void {
+  if (!isMusicRhythmMode) return;
+  const nextBeatMs = 360 + Math.floor(Math.random() * 340);
+  musicRhythmTimerId = window.setTimeout(() => {
+    spawnMusicNote();
+    if (Math.random() > 0.62) {
+      window.setTimeout(spawnMusicNote, 120);
+    }
+    scheduleNextMusicBeat();
+  }, nextBeatMs);
+}
+
+function setMusicRhythmMode(enabled: boolean, announce = true): void {
+  isMusicRhythmMode = enabled;
+
+  const container = document.getElementById("pet-container");
+  container?.classList.toggle("music-rhythm-active", enabled);
+
+  if (musicRhythmTimerId !== null) {
+    window.clearTimeout(musicRhythmTimerId);
+    musicRhythmTimerId = null;
+  }
+  if (enabled) {
+    const engine = (window as any).__petEngine as PetEngine | undefined;
+    if (engine?.hasState("music")) engine.applyState("music");
+    spawnMusicNote();
+    scheduleNextMusicBeat();
+  } else {
+    const engine = (window as any).__petEngine as PetEngine | undefined;
+    if (engine?.currentState === "music") engine.applyState("idle");
+  }
+
+  if (announce) {
+    showSpeech(enabled ? "音乐律动开启" : "音乐律动关闭", 1600);
+  }
+}
+
+function updateMusicRhythmButton(): void {
+  const musicButton = document.getElementById("context-music") as HTMLButtonElement | null;
+  if (!musicButton) return;
+
+  musicButton.classList.toggle("is-active", isMusicRhythmAutoEnabled);
+  musicButton.setAttribute("aria-pressed", String(isMusicRhythmAutoEnabled));
+  const label = musicButton.querySelector("span:last-child");
+  if (label) {
+    label.textContent = isMusicRhythmAutoEnabled ? "音乐律动" : "律动关闭";
+  }
+}
+
+async function pollSystemAudioState(): Promise<void> {
+  if (!isMusicRhythmAutoEnabled) return;
+  if (!isTauriRuntime()) return;
+
+  try {
+    const isPlaying = await invoke<boolean>("is_system_audio_playing");
+    lastSystemAudioPlaying = isPlaying;
+    if (isPlaying !== isMusicRhythmMode) {
+      setMusicRhythmMode(isPlaying, false);
+    }
+  } catch (err) {
+    console.warn("system audio check failed:", err);
+  }
+}
+
+function setMusicRhythmAutoEnabled(enabled: boolean, announce = true): void {
+  isMusicRhythmAutoEnabled = enabled;
+  localStorage.setItem(LS_MUSIC_RHYTHM_ENABLED, enabled ? "true" : "false");
+  updateMusicRhythmButton();
+
+  if (!enabled) {
+    setMusicRhythmMode(false, false);
+    lastSystemAudioPlaying = false;
+  } else {
+    void pollSystemAudioState();
+  }
+
+  if (announce) {
+    showSpeech(enabled ? "系统音频感知开启" : "系统音频感知关闭", 1800);
+  }
+}
+
+function setupMusicRhythmMode(): void {
+  updateMusicRhythmButton();
+  if (musicRhythmPollTimerId !== null) {
+    window.clearInterval(musicRhythmPollTimerId);
+  }
+  void pollSystemAudioState();
+  musicRhythmPollTimerId = window.setInterval(() => {
+    void pollSystemAudioState();
+  }, lastSystemAudioPlaying ? 900 : 1800);
+}
+
 // ── Drag & Physics (State Machine) ──
 
 let isMouseDown = false;
@@ -189,8 +514,11 @@ let dragThreshold = 5;
 let mouseDownX = 0;
 let mouseDownY = 0;
 let manualDragFrame: number | null = null;
+let manualDragSessionId = 0;
 let dragOffsetX = 0;
 let dragOffsetY = 0;
+let petWindowOffsetX = 0;
+let petWindowOffsetBottom = 0;
 
 // ── Bio-Clock State ──
 let isExiting = false;
@@ -202,17 +530,24 @@ const LS_PET_SIZE_SCALE = "pet_size_scale";
 const PET_BASE_WIDTH = 192;
 const PET_BASE_HEIGHT = 208;
 const PET_WINDOW_TOP_PADDING = 48;
+const PET_CONTEXT_MENU_SPACE = 174;
 // ── Focus Mode State ──
 let isFocusMode = false;
 let focusEndTime = 0;
+let focusDurationMs = 0;
 let focusIntervalId: ReturnType<typeof setInterval> | null = null;
-let cachedAlwaysOnTop = true;
-let isBubbleLocked = false;
+let isMeritMode = false;
+let meritIntervalId: ReturnType<typeof setInterval> | null = null;
 let lastPetInteractionTime = 0;
 let isPetHovered = false;
 let isPetMenuOpen = false;
 let isPetPanelOpen = false;
+let isRecallAnimating = false;
 let lastDragEndTime = 0;
+let isWindowIgnoringCursor = false;
+let lastKnownCursorX = -1;
+let lastKnownCursorY = -1;
+let lastSpriteFacing: "left" | "right" | null = null;
 
 // ── API Settings & Chat Mode ──
 
@@ -225,6 +560,79 @@ const LS_CUSTOM_PERSONA = "pet_custom_persona_text";
 const LS_GITHUB_USERNAME = "pet_github_username";
 const LS_GITHUB_LAST_PUSH = "pet_github_last_push_time";
 const LS_TODOS = "pet_todos";
+const LS_PRIMARY_PET_ID = "pet_primary_project_id";
+const LS_FOCUS_MINUTES = "pet_focus_minutes";
+const LS_SUMMONED_PET_IDS = "pet_summoned_pet_ids";
+const LS_PET_ASSETS_VERSION = "pet_assets_version";
+const LS_PET_EXTERNAL_SPEECH = "pet_external_speech";
+const LS_PET_WINDOW_STATE_VERSION = "pet_window_state_version";
+const LS_MERIT_TEXT = "pet_merit_text";
+const LS_MERIT_COUNT = "pet_merit_count";
+const LS_MERIT_TODAY_DATE = "pet_merit_today_date";
+const LS_MERIT_TODAY_COUNT = "pet_merit_today_count";
+const LS_MERIT_ENABLED = "pet_merit_enabled";
+const MERIT_DEFAULT_TEXT = "功德";
+const MERIT_HIT_INTERVAL_MS = 1600;
+let apiKeyMigrationWarned = false;
+
+function isTauriRuntime(): boolean {
+  return "__TAURI_INTERNALS__" in window;
+}
+
+async function saveApiKey(key: string): Promise<void> {
+  if (!isTauriRuntime()) {
+    localStorage.setItem(LS_API_KEY, key);
+    return;
+  }
+  await invoke("set_api_key", { key });
+  localStorage.removeItem(LS_API_KEY);
+}
+
+async function getApiKey(): Promise<string | null> {
+  if (!isTauriRuntime()) return localStorage.getItem(LS_API_KEY);
+
+  const legacyKey = localStorage.getItem(LS_API_KEY);
+  if (legacyKey) {
+    try {
+      await invoke("set_api_key", { key: legacyKey });
+      localStorage.removeItem(LS_API_KEY);
+      return legacyKey;
+    } catch (err) {
+      console.warn("API key migration failed:", err);
+      if (!apiKeyMigrationWarned) {
+        apiKeyMigrationWarned = true;
+        showSpeech("API Key 安全迁移失败，请重新保存 API 设置", 5000);
+      }
+      return null;
+    }
+  }
+
+  return await invoke<string | null>("get_api_key");
+}
+
+function getSavedSummonedPetIds(): string[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(LS_SUMMONED_PET_IDS) || "[]");
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string" && id.length > 0) : [];
+  } catch {
+    return [];
+  }
+}
+
+function setSavedSummonedPetIds(petIds: string[]): void {
+  localStorage.setItem(LS_SUMMONED_PET_IDS, JSON.stringify(petIds.filter(Boolean)));
+}
+
+function notifyPetWindowStateChanged(): void {
+  localStorage.setItem(LS_PET_WINDOW_STATE_VERSION, String(Date.now()));
+}
+
+function removeOneSavedSummonedPetId(petId: string): void {
+  const petIds = getSavedSummonedPetIds();
+  const index = petIds.indexOf(petId);
+  if (index >= 0) petIds.splice(index, 1);
+  setSavedSummonedPetIds(petIds);
+}
 
 interface TodoItem {
   id: string;
@@ -232,10 +640,13 @@ interface TodoItem {
   taskText: string;
   createdAt: number;
   delayMinutes: number | null;
+  recurrence?: "once" | "repeat";
+  nextTriggerAt?: number;
 }
 
 const todoTimers = new Map<string, ReturnType<typeof setTimeout>>();
 let reminderAudio: HTMLAudioElement | null = null;
+let dismissActiveReminder: (() => void) | null = null;
 
 function formatDelay(minutes: number): string {
   if (minutes < 1) return `${Math.round(minutes * 60)}秒`;
@@ -246,7 +657,7 @@ function formatDelay(minutes: number): string {
 }
 
 let lastSmartSpeechTimestamp = 0;
-const SMART_COOLDOWN = 10 * 60 * 1000;
+const SMART_COOLDOWN = 5 * 60 * 1000;
 
 function getPetSizeScale(): number {
   const saved = Number(localStorage.getItem(LS_PET_SIZE_SCALE) || "0.6");
@@ -256,14 +667,32 @@ function getPetSizeScale(): number {
 
 function getPetPixelSize(scale = getPetSizeScale()): { width: number; height: number } {
   return {
-    width: Math.round(Math.max(PET_BASE_WIDTH, PET_BASE_WIDTH * scale)),
+    width: Math.round(Math.max(PET_BASE_WIDTH + PET_CONTEXT_MENU_SPACE, PET_BASE_WIDTH * scale + PET_CONTEXT_MENU_SPACE)),
     height: Math.round(PET_WINDOW_TOP_PADDING + Math.max(PET_BASE_HEIGHT, PET_BASE_HEIGHT * scale)),
   };
 }
 
+function getPetVisualRectInWindow(width: number, height: number, scale = getPetSizeScale()): { left: number; top: number; width: number; height: number } {
+  void scale;
+  const visualWidth = PET_BASE_WIDTH;
+  const visualHeight = PET_BASE_HEIGHT;
+  return {
+    left: width / 2 - visualWidth / 2,
+    top: height - visualHeight,
+    width: visualWidth,
+    height: visualHeight,
+  };
+}
+
+function setPetWindowOffset(offsetX: number, offsetBottom: number): void {
+  petWindowOffsetX = Math.round(offsetX);
+  petWindowOffsetBottom = Math.max(0, Math.round(offsetBottom));
+  document.documentElement.style.setProperty("--pet-window-offset-x", `${petWindowOffsetX}px`);
+  document.documentElement.style.setProperty("--pet-window-offset-bottom", `${petWindowOffsetBottom}px`);
+}
+
 function formatPetSize(scale = getPetSizeScale()): string {
-  const size = getPetPixelSize(scale);
-  return `${Math.round(scale * 100)}% · ${size.width} x ${size.height}px`;
+  return `${Math.round(scale * 100)}% · ${Math.round(PET_BASE_WIDTH * scale)} x ${Math.round(PET_BASE_HEIGHT * scale)}px`;
 }
 
 async function applyPetSizeScale(scale = getPetSizeScale()): Promise<void> {
@@ -275,24 +704,7 @@ async function applyPetSizeScale(scale = getPetSizeScale()): Promise<void> {
   const appWindow = getCurrentWindow();
   const size = getPetPixelSize(nextScale);
   await appWindow.setSize(new LogicalSize(size.width, size.height));
-}
-
-function showSizePanel(): void {
-  const panel = document.getElementById("size-panel");
-  const slider = document.getElementById("size-slider") as HTMLInputElement | null;
-  const input = document.getElementById("size-input") as HTMLInputElement | null;
-  const text = document.getElementById("size-text");
-  if (!panel || !slider || !input || !text) return;
-
-  const scale = getPetSizeScale();
-  const percent = Math.round(scale * 100);
-  slider.value = String(percent);
-  input.value = String(percent);
-  text.textContent = formatPetSize(scale);
-  isPetPanelOpen = true;
-  lastPetInteractionTime = Date.now();
-  panel.style.display = "flex";
-  panel.style.bottom = "20px";
+  await clampCurrentWindowToRoamBounds();
 }
 
 function setupSizePanel(): void {
@@ -337,16 +749,506 @@ function setupSizePanel(): void {
   });
 }
 
-function showApiSettingsPanel(): void {
-  const panel = document.getElementById("api-settings-panel");
-  if (!panel) return;
-  const epInput = document.getElementById("api-endpoint") as HTMLInputElement | null;
-  const keyInput = document.getElementById("api-key") as HTMLInputElement | null;
-  const modelInput = document.getElementById("api-model") as HTMLInputElement | null;
-  if (epInput) epInput.value = localStorage.getItem(LS_API_ENDPOINT) || "";
-  if (keyInput) keyInput.value = localStorage.getItem(LS_API_KEY) || "";
-  if (modelInput) modelInput.value = localStorage.getItem(LS_API_MODEL) || "gpt-3.5-turbo";
+function formatFocusRemaining(ms: number): string {
+  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function updateFocusStatusText(text: string): void {
+  const status = document.getElementById("focus-status-text");
+  if (status) status.textContent = text;
+}
+
+function updateFocusPanelState(remainingMs: number, running: boolean): void {
+  updateFocusStatusText(formatFocusRemaining(remainingMs));
+  const label = document.getElementById("focus-state-label");
+  if (label) label.textContent = running ? "工作中，桌宠会保持安静" : "准备开始";
+
+  const bar = document.getElementById("focus-progress-bar") as HTMLElement | null;
+  if (bar) {
+    const progress = running && focusDurationMs > 0
+      ? 1 - clamp(remainingMs / focusDurationMs, 0, 1)
+      : 0;
+    bar.style.width = `${Math.round(progress * 100)}%`;
+  }
+}
+
+function syncFocusPresetButtons(minutes: number): void {
+  document.querySelectorAll<HTMLButtonElement>(".focus-preset").forEach((button) => {
+    button.classList.toggle("active", Number(button.dataset.focusMinutes) === minutes);
+  });
+}
+
+function setFocusBubbleText(text: string): void {
+  const bubble = document.getElementById("pet-speech-bubble");
+  const bubbleText = bubble?.querySelector(".bubble-text") as HTMLElement | null;
+  if (!bubble || !bubbleText) return;
+  bubbleText.textContent = text;
+  bubble.classList.add("show-bubble");
+}
+
+function clearFocusTimer(): void {
+  if (focusIntervalId) {
+    clearInterval(focusIntervalId);
+    focusIntervalId = null;
+  }
+}
+
+function startFocusMode(minutes: number, engine: PetEngine): void {
+  if (isMeritMode) endMeritMode(engine, false);
+  const duration = Math.min(240, Math.max(1, Math.round(minutes)));
+  localStorage.setItem(LS_FOCUS_MINUTES, String(duration));
+  clearFocusTimer();
+
+  isFocusMode = true;
+  if (manualDragFrame !== null) {
+    window.cancelAnimationFrame(manualDragFrame);
+    manualDragFrame = null;
+  }
+  isMouseDown = false;
+  hasStartedDragging = false;
+  isDraggingInProgress = false;
+  focusDurationMs = duration * 60_000;
+  focusEndTime = Date.now() + focusDurationMs;
+  lastPetInteractionTime = Date.now();
+  lastActivityTime = Date.now();
+  engine.applyState(engine.hasState("focus") ? "focus" : "review");
+  showSpeech(`专注 ${duration} 分钟，开始工作`, 2600);
+  syncFocusPresetButtons(duration);
+
+  focusIntervalId = setInterval(() => {
+    if (!isFocusMode) return;
+    const remaining = focusEndTime - Date.now();
+    if (remaining <= 0) {
+      endFocusMode(engine, true);
+      return;
+    }
+    const remainingText = formatFocusRemaining(remaining);
+    updateFocusPanelState(remaining, true);
+    setFocusBubbleText(`专注中 ${remainingText}`);
+    const focusState = engine.hasState("focus") ? "focus" : "review";
+    if (engine.currentState !== focusState) engine.applyState(focusState);
+  }, 1000);
+
+  updateFocusPanelState(focusDurationMs, true);
+}
+
+function endFocusMode(engine: PetEngine, completed: boolean): void {
+  clearFocusTimer();
+  const wasFocusMode = isFocusMode;
+  isFocusMode = false;
+  focusEndTime = 0;
+  focusDurationMs = 0;
+  const savedMinutes = Number(localStorage.getItem(LS_FOCUS_MINUTES) || "25");
+  updateFocusPanelState(savedMinutes * 60_000, false);
+  lastPetInteractionTime = Date.now();
+  lastActivityTime = Date.now();
+
+  if (!wasFocusMode) return;
+  if (completed) playSound("bell");
+  engine.applyState(completed ? "jumping" : "idle");
+  showSpeech(completed ? "专注结束，辛苦啦！" : "已退出专注模式", 3200);
+  if (completed) {
+    window.setTimeout(() => {
+      if (!isExiting && !isFocusMode && !isMeritMode) engine.applyState("idle");
+    }, 1800);
+  }
+}
+
+function showFocusPanel(): void {
+  const panel = document.getElementById("focus-panel") as HTMLElement | null;
+  const input = document.getElementById("focus-minutes-input") as HTMLInputElement | null;
+  if (!panel || !input) return;
+
+  input.value = localStorage.getItem(LS_FOCUS_MINUTES) || input.value || "25";
+  const minutes = Math.min(240, Math.max(1, Math.round(Number(input.value) || 25)));
+  input.value = String(minutes);
+  syncFocusPresetButtons(minutes);
+  updateFocusPanelState(isFocusMode ? focusEndTime - Date.now() : minutes * 60_000, isFocusMode);
+  positionFocusPanel(panel);
+  isPetPanelOpen = true;
+  lastPetInteractionTime = Date.now();
+}
+
+function positionFocusPanel(panel: HTMLElement): void {
+  const pet = document.getElementById("pet-container");
+  const margin = 8;
+  const gap = 8;
+  panel.style.visibility = "hidden";
   panel.style.display = "block";
+  panel.style.maxHeight = "";
+
+  const panelRect = panel.getBoundingClientRect();
+  const petRect = pet?.getBoundingClientRect();
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  let left = margin;
+  let top = margin;
+
+  if (petRect) {
+    const rightLeft = petRect.right + gap;
+    const leftLeft = petRect.left - panelRect.width - gap;
+    const sideTop = clamp(
+      petRect.top + petRect.height / 2 - panelRect.height / 2,
+      margin,
+      viewportHeight - panelRect.height - margin,
+    );
+
+    if (rightLeft + panelRect.width <= viewportWidth - margin) {
+      left = rightLeft;
+      top = sideTop;
+    } else if (leftLeft >= margin) {
+      left = leftLeft;
+      top = sideTop;
+    } else {
+      const aboveTop = petRect.top - panelRect.height - gap;
+      if (aboveTop >= margin) {
+        top = aboveTop;
+        left = clamp(petRect.left + petRect.width / 2 - panelRect.width / 2, margin, viewportWidth - panelRect.width - margin);
+      } else {
+        left = clamp(viewportWidth - panelRect.width - margin, margin, viewportWidth - panelRect.width - margin);
+        top = margin;
+      }
+    }
+  }
+
+  panel.style.left = `${Math.round(left)}px`;
+  panel.style.top = `${Math.round(top)}px`;
+  panel.style.visibility = "";
+}
+
+function normalizeMeritText(value: string | null): string {
+  const text = (value || "").trim();
+  return text.length > 0 ? text.slice(0, 12) : MERIT_DEFAULT_TEXT;
+}
+
+function getMeritText(): string {
+  return normalizeMeritText(localStorage.getItem(LS_MERIT_TEXT) || MERIT_DEFAULT_TEXT);
+}
+
+function getMeritCount(): number {
+  const count = Number(localStorage.getItem(LS_MERIT_COUNT) || "0");
+  return Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0;
+}
+
+function setMeritCount(count: number): void {
+  localStorage.setItem(LS_MERIT_COUNT, String(Math.max(0, Math.floor(count))));
+}
+
+function getMeritDateKey(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function ensureMeritTodayCount(): void {
+  const today = getMeritDateKey();
+  if (localStorage.getItem(LS_MERIT_TODAY_DATE) === today) return;
+  localStorage.setItem(LS_MERIT_TODAY_DATE, today);
+  localStorage.setItem(LS_MERIT_TODAY_COUNT, "0");
+}
+
+function getMeritTodayCount(): number {
+  ensureMeritTodayCount();
+  const count = Number(localStorage.getItem(LS_MERIT_TODAY_COUNT) || "0");
+  return Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0;
+}
+
+function setMeritTodayCount(count: number): void {
+  ensureMeritTodayCount();
+  localStorage.setItem(LS_MERIT_TODAY_COUNT, String(Math.max(0, Math.floor(count))));
+}
+
+function updateMeritPanelState(): void {
+  const label = document.getElementById("merit-state-label");
+  const totalCount = document.getElementById("merit-total-count-text");
+  const todayCount = document.getElementById("merit-today-count-text");
+  const input = document.getElementById("merit-text-input") as HTMLInputElement | null;
+  if (label) label.textContent = isMeritMode ? "木鱼敲击中" : "准备敲木鱼";
+  if (totalCount) totalCount.textContent = String(getMeritCount());
+  if (todayCount) todayCount.textContent = String(getMeritTodayCount());
+  if (input && document.activeElement !== input) input.value = getMeritText();
+}
+
+function triggerFallbackMeritHit(container: HTMLElement | null): void {
+  if (!container) return;
+  container.classList.remove("merit-hit");
+  void container.offsetWidth;
+  container.classList.add("merit-hit");
+  window.setTimeout(() => container.classList.remove("merit-hit"), 260);
+}
+
+function getMeritSoundFrame(engine: PetEngine): number {
+  return Math.max(0, Math.min(2, engine.frameCount("merit") - 1));
+}
+
+function triggerMeritHit(engine: PetEngine): void {
+  const container = document.getElementById("pet-container");
+  const text = getMeritText();
+  setMeritCount(getMeritCount() + 1);
+  setMeritTodayCount(getMeritTodayCount() + 1);
+  updateMeritPanelState();
+
+  if (engine.hasState("merit")) {
+    engine.playOnce("merit", isMeritMode ? "merit" : "idle", {
+      [getMeritSoundFrame(engine)]: () => playSound("woodfish"),
+    });
+  } else {
+    triggerFallbackMeritHit(container);
+    if (engine.currentState !== "review") engine.applyState("review");
+    playSound("woodfish");
+  }
+
+  showSpeech(`${text} +1`, 900, false);
+}
+
+function clearMeritTimer(): void {
+  if (meritIntervalId) {
+    clearInterval(meritIntervalId);
+    meritIntervalId = null;
+  }
+}
+
+function startMeritMode(engine: PetEngine): void {
+  if (isFocusMode) endFocusMode(engine, false);
+  clearMeritTimer();
+  const container = document.getElementById("pet-container");
+  const text = getMeritText();
+  localStorage.setItem(LS_MERIT_TEXT, text);
+  localStorage.setItem(LS_MERIT_ENABLED, "true");
+  isMeritMode = true;
+  if (manualDragFrame !== null) {
+    window.cancelAnimationFrame(manualDragFrame);
+    manualDragFrame = null;
+  }
+  isMouseDown = false;
+  hasStartedDragging = false;
+  isDraggingInProgress = false;
+  lastPetInteractionTime = Date.now();
+  lastActivityTime = Date.now();
+  container?.classList.toggle("merit-active", !engine.hasState("merit"));
+  engine.applyState(engine.hasState("merit") ? "merit" : "review");
+  updateMeritPanelState();
+  showSpeech(`${text}模式开始`, 1800);
+  triggerMeritHit(engine);
+  meritIntervalId = setInterval(() => {
+    if (!isMeritMode) return;
+    triggerMeritHit(engine);
+  }, MERIT_HIT_INTERVAL_MS);
+}
+
+function endMeritMode(engine: PetEngine, announce = true): void {
+  const wasMeritMode = isMeritMode;
+  clearMeritTimer();
+  isMeritMode = false;
+  localStorage.setItem(LS_MERIT_ENABLED, "false");
+  document.getElementById("pet-container")?.classList.remove("merit-active", "merit-hit");
+  updateMeritPanelState();
+  lastPetInteractionTime = Date.now();
+  lastActivityTime = Date.now();
+  if (!wasMeritMode) return;
+  engine.applyState("idle");
+  if (announce) showSpeech("功德模式已停止", 1800);
+}
+
+function showMeritPanel(): void {
+  const panel = document.getElementById("merit-panel") as HTMLElement | null;
+  const input = document.getElementById("merit-text-input") as HTMLInputElement | null;
+  if (!panel || !input) return;
+  input.value = getMeritText();
+  updateMeritPanelState();
+  positionFocusPanel(panel);
+  isPetPanelOpen = true;
+  lastPetInteractionTime = Date.now();
+}
+
+function setupMeritPanel(engine: PetEngine): void {
+  const panel = document.getElementById("merit-panel") as HTMLElement | null;
+  const input = document.getElementById("merit-text-input") as HTMLInputElement | null;
+  const startBtn = document.getElementById("merit-start") as HTMLButtonElement | null;
+  const stopBtn = document.getElementById("merit-stop") as HTMLButtonElement | null;
+  if (!panel || !input || !startBtn || !stopBtn) return;
+
+  input.value = getMeritText();
+  updateMeritPanelState();
+
+  input.addEventListener("input", () => {
+    const text = normalizeMeritText(input.value);
+    localStorage.setItem(LS_MERIT_TEXT, text);
+    lastPetInteractionTime = Date.now();
+  });
+
+  input.addEventListener("change", () => {
+    input.value = getMeritText();
+  });
+
+  startBtn.addEventListener("click", () => {
+    input.value = normalizeMeritText(input.value);
+    localStorage.setItem(LS_MERIT_TEXT, input.value);
+    startMeritMode(engine);
+    panel.style.display = "none";
+    isPetPanelOpen = false;
+  });
+
+  stopBtn.addEventListener("click", () => {
+    endMeritMode(engine);
+    panel.style.display = "none";
+    isPetPanelOpen = false;
+  });
+
+  panel.addEventListener("mouseenter", () => {
+    isPetPanelOpen = true;
+    lastPetInteractionTime = Date.now();
+  });
+
+  window.addEventListener("pointerdown", (event) => {
+    if (panel.style.display === "none") return;
+    const target = event.target as Node | null;
+    const hitbox = document.getElementById("pet-hitbox");
+    if (target && (panel.contains(target) || hitbox?.contains(target))) return;
+    panel.style.display = "none";
+    isPetPanelOpen = false;
+  });
+
+  window.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || panel.style.display === "none") return;
+    panel.style.display = "none";
+    isPetPanelOpen = false;
+  });
+}
+
+function setupFocusPanel(engine: PetEngine): void {
+  const panel = document.getElementById("focus-panel") as HTMLElement | null;
+  const input = document.getElementById("focus-minutes-input") as HTMLInputElement | null;
+  const startBtn = document.getElementById("focus-start") as HTMLButtonElement | null;
+  const stopBtn = document.getElementById("focus-stop") as HTMLButtonElement | null;
+  if (!panel || !input || !startBtn || !stopBtn) return;
+
+  input.value = localStorage.getItem(LS_FOCUS_MINUTES) || "25";
+  syncFocusPresetButtons(Number(input.value) || 25);
+  updateFocusPanelState((Number(input.value) || 25) * 60_000, false);
+
+  document.querySelectorAll<HTMLButtonElement>(".focus-preset").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (isFocusMode) return;
+      const minutes = Number(button.dataset.focusMinutes) || 25;
+      input.value = String(minutes);
+      localStorage.setItem(LS_FOCUS_MINUTES, String(minutes));
+      syncFocusPresetButtons(minutes);
+      updateFocusPanelState(minutes * 60_000, false);
+      lastPetInteractionTime = Date.now();
+    });
+  });
+
+  input.addEventListener("input", () => {
+    if (isFocusMode) return;
+    const minutes = Math.min(240, Math.max(1, Math.round(Number(input.value) || 25)));
+    localStorage.setItem(LS_FOCUS_MINUTES, String(minutes));
+    syncFocusPresetButtons(minutes);
+    updateFocusPanelState(minutes * 60_000, false);
+    lastPetInteractionTime = Date.now();
+  });
+
+  startBtn.addEventListener("click", () => {
+    const minutes = Number(input.value) || 25;
+    startFocusMode(minutes, engine);
+    panel.style.display = "none";
+    isPetPanelOpen = false;
+  });
+
+  stopBtn.addEventListener("click", () => {
+    endFocusMode(engine, false);
+    panel.style.display = "none";
+    isPetPanelOpen = false;
+  });
+
+  panel.addEventListener("mouseenter", () => {
+    isPetPanelOpen = true;
+    lastPetInteractionTime = Date.now();
+  });
+
+  window.addEventListener("pointerdown", (event) => {
+    if (panel.style.display === "none") return;
+    const target = event.target as Node | null;
+    const hitbox = document.getElementById("pet-hitbox");
+    if (target && (panel.contains(target) || hitbox?.contains(target))) return;
+    panel.style.display = "none";
+    isPetPanelOpen = false;
+  });
+
+  window.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || panel.style.display === "none") return;
+    panel.style.display = "none";
+    isPetPanelOpen = false;
+  });
+}
+
+function setupManagerSettingsSync(): void {
+  let lastScale = getPetSizeScale();
+  let lastAlwaysOnTop = isAlwaysOnTop;
+  let lastPrimaryPetId = localStorage.getItem(LS_PRIMARY_PET_ID) || "ikun-pet";
+  let lastPetAssetsVersion = localStorage.getItem(LS_PET_ASSETS_VERSION) || "";
+  let lastMusicRhythmSyncMode = getMusicRhythmSyncMode();
+  window.setInterval(() => {
+    const nextScale = getPetSizeScale();
+    if (Math.abs(nextScale - lastScale) > 0.001) {
+      lastScale = nextScale;
+      void applyPetSizeScale(nextScale);
+    }
+
+    const nextAlwaysOnTop = localStorage.getItem("pet-always-on-top") !== "false";
+    if (nextAlwaysOnTop !== lastAlwaysOnTop) {
+      lastAlwaysOnTop = nextAlwaysOnTop;
+      isAlwaysOnTop = nextAlwaysOnTop;
+      void getCurrentWindow().setAlwaysOnTop(nextAlwaysOnTop);
+    }
+
+    const nextMusicRhythmSyncMode = getMusicRhythmSyncMode();
+    if (nextMusicRhythmSyncMode !== lastMusicRhythmSyncMode) {
+      lastMusicRhythmSyncMode = nextMusicRhythmSyncMode;
+      const engine = (window as any).__petEngine as PetEngine | undefined;
+      engine?.refreshCurrentAnimationTiming();
+    }
+
+    const nextPrimaryPetId = localStorage.getItem(LS_PRIMARY_PET_ID) || "ikun-pet";
+    const nextPetAssetsVersion = localStorage.getItem(LS_PET_ASSETS_VERSION) || "";
+    const shouldReloadPrimaryPet = getCurrentWindow().label === "pet" && nextPrimaryPetId !== lastPrimaryPetId;
+    const shouldReloadEditedAssets = nextPetAssetsVersion !== lastPetAssetsVersion;
+    if (shouldReloadPrimaryPet || shouldReloadEditedAssets) {
+      lastPrimaryPetId = nextPrimaryPetId;
+      lastPetAssetsVersion = nextPetAssetsVersion;
+      void loadPetAssets().then(({ spritesheetUrl, manifest }) => {
+        const engine = (window as any).__petEngine as PetEngine | undefined;
+        engine?.setAtlas(atlasFromManifest(manifest));
+        engine?.setSpritesheet(`${spritesheetUrl}${spritesheetUrl.includes("?") ? "&" : "?"}v=${Date.now()}`);
+      });
+    }
+  }, 600);
+}
+
+async function restoreSavedSummonedPets(): Promise<void> {
+  if (getCurrentWindow().label !== "pet") return;
+  const savedPetIds = getSavedSummonedPetIds();
+  if (savedPetIds.length === 0) return;
+  const primaryPetId = localStorage.getItem(LS_PRIMARY_PET_ID) || "ikun-pet";
+  if (savedPetIds.length === 1 && savedPetIds[0] === primaryPetId) {
+    setSavedSummonedPetIds([]);
+    return;
+  }
+
+  try {
+    const existing = await invoke<Array<{ label: string; petId: string }>>("list_summoned_pet_windows");
+    if (existing.length > 0) return;
+    for (const petId of savedPetIds) {
+      await invoke("summon_pet_window", { petId });
+    }
+  } catch (err) {
+    console.warn("restore saved summoned pets failed:", err);
+  }
 }
 
 function setupApiSettingsPanel(): void {
@@ -391,9 +1293,9 @@ function setupApiSettingsPanel(): void {
 
       if (resp.ok) {
         saveBtn.classList.add("success");
+        await saveApiKey(key);
         saveBtn.textContent = "连接成功";
         localStorage.setItem(LS_API_ENDPOINT, endpoint);
-        localStorage.setItem(LS_API_KEY, key);
         localStorage.setItem(LS_API_MODEL, userModel);
         setTimeout(() => {
           panel.style.display = "none";
@@ -426,14 +1328,6 @@ function setupApiSettingsPanel(): void {
   });
 }
 
-function showCustomPersonaPanel(): void {
-  const panel = document.getElementById("custom-persona-panel");
-  if (!panel) return;
-  const textarea = document.getElementById("custom-persona-text") as HTMLTextAreaElement | null;
-  if (textarea) textarea.value = localStorage.getItem(LS_CUSTOM_PERSONA) || "";
-  panel.style.display = "block";
-}
-
 function setupCustomPersonaPanel(): void {
   const panel = document.getElementById("custom-persona-panel");
   const saveBtn = document.getElementById("persona-settings-save");
@@ -449,14 +1343,6 @@ function setupCustomPersonaPanel(): void {
   cancelBtn.addEventListener("click", () => {
     panel.style.display = "none";
   });
-}
-
-function showGitHubSettingsPanel(): void {
-  const panel = document.getElementById("github-settings-panel");
-  if (!panel) return;
-  const input = document.getElementById("github-username-input") as HTMLInputElement | null;
-  if (input) input.value = localStorage.getItem(LS_GITHUB_USERNAME) || "";
-  panel.style.display = "block";
 }
 
 function setupGitHubSettingsPanel(): void {
@@ -516,161 +1402,152 @@ function setupGitHubSettingsPanel(): void {
   });
 }
 
-// ── Smart Todo Panel ──
+// ── Todo And Reminder Panels ──
 
-let todoPanelJustOpened = false;
+let taskPanelJustOpened = false;
+
+function positionTaskPanel(panel: HTMLElement): void {
+  const pet = document.getElementById("pet-container");
+  const margin = 12;
+  const gap = 12;
+  panel.style.visibility = "hidden";
+  panel.style.display = "block";
+  panel.style.maxHeight = `calc(100vh - ${margin * 2}px)`;
+
+  const panelRect = panel.getBoundingClientRect();
+  const petRect = pet?.getBoundingClientRect();
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  let left = Math.max(margin, (viewportWidth - panelRect.width) / 2);
+  let top = margin;
+
+  if (petRect) {
+    const aboveTop = petRect.top - panelRect.height - gap;
+    const rightLeft = petRect.right + gap;
+    const leftLeft = petRect.left - panelRect.width - gap;
+
+    if (aboveTop >= margin) {
+      top = aboveTop;
+      left = clamp(petRect.left + petRect.width / 2 - panelRect.width / 2, margin, viewportWidth - panelRect.width - margin);
+    } else if (rightLeft + panelRect.width <= viewportWidth - margin) {
+      left = rightLeft;
+      top = clamp(petRect.top, margin, viewportHeight - panelRect.height - margin);
+    } else if (leftLeft >= margin) {
+      left = leftLeft;
+      top = clamp(petRect.top, margin, viewportHeight - panelRect.height - margin);
+    } else {
+      const safeHeight = Math.max(120, petRect.top - gap - margin);
+      if (safeHeight < panelRect.height) {
+        panel.style.maxHeight = `${safeHeight}px`;
+      }
+      top = margin;
+      left = clamp(petRect.left + petRect.width / 2 - panelRect.width / 2, margin, viewportWidth - panelRect.width - margin);
+    }
+  }
+
+  panel.style.left = `${Math.round(left)}px`;
+  panel.style.top = `${Math.round(top)}px`;
+  panel.style.visibility = "";
+}
+
+function showTaskPanel(panelId: "todo-panel" | "reminder-panel"): void {
+  const panel = document.getElementById(panelId);
+  if (!panel) return;
+  const engine = (window as any).__petEngine as PetEngine | undefined;
+  const otherPanelId = panelId === "todo-panel" ? "reminder-panel" : "todo-panel";
+  const otherPanel = document.getElementById(otherPanelId);
+  if (otherPanel) otherPanel.style.display = "none";
+
+  taskPanelJustOpened = true;
+  positionTaskPanel(panel);
+  lastPetInteractionTime = Date.now();
+  engine?.applyState("idle");
+  requestAnimationFrame(() => { taskPanelJustOpened = false; });
+}
 
 function showTodoPanel(): void {
-  const panel = document.getElementById("todo-panel");
-  const input = document.getElementById("todo-input") as HTMLInputElement | null;
-  if (!panel) return;
-
-  // 根据 API 配置状态切换 placeholder
-  if (input) {
-    const hasApi = !!localStorage.getItem(LS_API_ENDPOINT) && !!localStorage.getItem(LS_API_KEY);
-    input.placeholder = hasApi
-      ? "10分钟后叫我喝水 / 学习深度学习"
-      : "输入记事内容 (配置 API 解锁倒计时)";
-  }
-
-  todoPanelJustOpened = true;
-  panel.style.display = "block";
-  // 下一帧解除锁定，防止刚打开就被全局 mousedown 关闭
-  requestAnimationFrame(() => { todoPanelJustOpened = false; });
+  showTaskPanel("todo-panel");
 }
 
-async function parseTodoIntent(userInput: string): Promise<TodoItem | null> {
-  // 本地正则先拦截常见时间格式，不走 API
-  const localResult = matchLocalReminder(userInput);
-  if (localResult) return localResult;
+function showReminderPanel(): void {
+  showTaskPanel("reminder-panel");
+}
 
-  // 纯文字任务交给大模型判断
-  const endpoint0 = localStorage.getItem(LS_API_ENDPOINT);
-  const apiKey = localStorage.getItem(LS_API_KEY);
-  const model = localStorage.getItem(LS_API_MODEL) || "gpt-3.5-turbo";
-  if (!endpoint0 || !apiKey) {
-    showSpeech("请先配置 API 节点", 3000);
-    return null;
-  }
-
-  let endpoint = endpoint0.trim().replace(/\/+$/, "");
-  if (!endpoint.endsWith("/chat/completions")) {
-    endpoint += "/v1/chat/completions";
-  }
-
-  const systemPrompt = 'Reply only with JSON: {"type":"note","delayMinutes":null,"taskText":"<task>"}.';
-
+function readTodoItems(): TodoItem[] {
   try {
-    const resp = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userInput },
-        ],
-        max_tokens: 80,
-        temperature: 0.1,
-      }),
-    });
-
-    if (!resp.ok) {
-      const errBody = await resp.text().catch(() => "");
-      console.error(`parseTodoIntent HTTP ${resp.status}:`, errBody);
-      throw new Error(`HTTP ${resp.status}`);
-    }
-
-    const data = await resp.json();
-    if (data.error) {
-      console.error("parseTodoIntent API error:", data.error);
-      throw new Error(data.error.message || "API error");
-    }
-
-    const raw = data.choices?.[0]?.message?.content?.trim();
-    if (!raw) throw new Error("Empty response");
-
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("No JSON found");
-
-    const parsed = JSON.parse(jsonMatch[0]);
-
-    return {
-      id: `todo_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-      type: parsed.type === "reminder" ? "reminder" : "note",
-      taskText: String(parsed.taskText || userInput),
-      createdAt: Date.now(),
-      delayMinutes: parsed.type === "reminder" ? Number(parsed.delayMinutes) : null,
-    };
-  } catch (err) {
-    // API 失败时降级为本地备忘录
-    console.warn("parseTodoIntent API failed, fallback to note:", err);
-    return {
-      id: `todo_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-      type: "note",
-      taskText: userInput,
-      createdAt: Date.now(),
-      delayMinutes: null,
-    };
+    const parsed = JSON.parse(localStorage.getItem(LS_TODOS) || "[]") as TodoItem[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
   }
 }
 
-/** 本地正则匹配常见时间格式，命中直接返回 reminder，不走 API */
-function matchLocalReminder(input: string): TodoItem | null {
-  const patterns: [RegExp, (m: RegExpMatchArray) => number][] = [
-    // Xs / X秒
-    [/\b(\d+)\s*[sS秒]/, (m) => +m[1] / 60],
-    // X分钟 / X分
-    [/\b(\d+)\s*[分mM][钟]?/, (m) => +m[1]],
-    // X小时
-    [/\b(\d+)\s*[hH小时]/, (m) => +m[1] * 60],
-  ];
+function writeTodoItems(items: TodoItem[]): void {
+  localStorage.setItem(LS_TODOS, JSON.stringify(items));
+}
 
-  for (const [re, toMinutes] of patterns) {
-    const m = input.match(re);
-    if (m) {
-      const minutes = toMinutes(m);
-      if (minutes > 0) {
-        // 去掉时间描述 + "后" + "提醒我/叫我" + 尾部标点，提取核心任务
-        let taskText = input
-          .replace(re, "")
-          .replace(/^后/, "")
-          .replace(/提醒我|提醒一下我|叫我|叫一下我/g, "")
-          .replace(/[,，。、;；!！\s]+$/g, "")
-          .trim();
-        return {
-          id: `todo_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-          type: "reminder",
-          taskText: taskText || "",
-          createdAt: Date.now(),
-          delayMinutes: Math.max(minutes, 1 / 60), // 最少 1 秒
-        };
-      }
-    }
+function getNextTriggerAt(item: TodoItem): number {
+  return item.nextTriggerAt ?? item.createdAt + (item.delayMinutes || 0) * 60000;
+}
+
+function clearTodoTimers(id: string): void {
+  const timer = todoTimers.get(id);
+  const tickTimer = todoTimers.get(`${id}_tick`);
+  if (timer) clearTimeout(timer);
+  if (tickTimer) clearInterval(tickTimer);
+  todoTimers.delete(id);
+  todoTimers.delete(`${id}_tick`);
+}
+
+function removeTodoItem(id: string, removeElement = true): void {
+  clearTodoTimers(id);
+  writeTodoItems(readTodoItems().filter((item) => item.id !== id));
+  if (removeElement) {
+    document.getElementById(`todo-${id}`)?.remove();
+    document.getElementById(`reminder-${id}`)?.remove();
   }
+}
 
-  return null;
+function upsertTodoItem(item: TodoItem): void {
+  const items = readTodoItems();
+  const index = items.findIndex((saved) => saved.id === item.id);
+  if (index >= 0) items[index] = item;
+  else items.push(item);
+  writeTodoItems(items);
 }
 
 function setupTodoPanel(): void {
   const panelEl = document.getElementById("todo-panel");
+  const reminderPanelEl = document.getElementById("reminder-panel");
   const inputEl = document.getElementById("todo-input") as HTMLInputElement | null;
   const submitBtnEl = document.getElementById("todo-submit") as HTMLButtonElement | null;
   const listEl = document.getElementById("todo-list");
-  if (!panelEl || !inputEl || !submitBtnEl || !listEl) return;
+  const reminderInputEl = document.getElementById("reminder-input") as HTMLInputElement | null;
+  const reminderDelayEl = document.getElementById("reminder-delay") as HTMLInputElement | null;
+  const reminderUnitEl = document.getElementById("reminder-unit") as HTMLSelectElement | null;
+  const reminderRepeatEl = document.getElementById("reminder-repeat") as HTMLSelectElement | null;
+  const reminderSubmitEl = document.getElementById("reminder-submit") as HTMLButtonElement | null;
+  const reminderListEl = document.getElementById("reminder-list");
+  if (!panelEl || !reminderPanelEl || !inputEl || !submitBtnEl || !listEl || !reminderInputEl || !reminderDelayEl || !reminderUnitEl || !reminderRepeatEl || !reminderSubmitEl || !reminderListEl) return;
   const panel = panelEl;
+  const reminderPanel = reminderPanelEl;
   const input = inputEl;
   const submitBtn = submitBtnEl;
   const list = listEl;
+  const reminderInput = reminderInputEl;
+  const reminderDelay = reminderDelayEl;
+  const reminderUnit = reminderUnitEl;
+  const reminderRepeat = reminderRepeatEl;
+  const reminderSubmit = reminderSubmitEl;
+  const reminderList = reminderListEl;
 
-  // 点击面板外部关闭
   document.addEventListener("mousedown", (e) => {
-    if (todoPanelJustOpened) return;
+    if (taskPanelJustOpened) return;
     if (panel.style.display === "block" && !panel.contains(e.target as Node)) {
       panel.style.display = "none";
+    }
+    if (reminderPanel.style.display === "block" && !reminderPanel.contains(e.target as Node)) {
+      reminderPanel.style.display = "none";
     }
   });
 
@@ -699,8 +1576,7 @@ function setupTodoPanel(): void {
     doneBtn.className = "todo-done-btn";
     doneBtn.textContent = "DONE";
     doneBtn.addEventListener("click", () => {
-      const todos = (JSON.parse(localStorage.getItem(LS_TODOS) || "[]") as TodoItem[]).filter((t) => t.id !== item.id);
-      localStorage.setItem(LS_TODOS, JSON.stringify(todos));
+      removeTodoItem(item.id, false);
       el.style.opacity = "0";
       el.style.transition = "opacity 0.2s";
       setTimeout(() => el.remove(), 200);
@@ -714,113 +1590,111 @@ function setupTodoPanel(): void {
   }
 
   function renderReminderItem(item: TodoItem): void {
+    clearTodoTimers(item.id);
+    document.getElementById(`reminder-${item.id}`)?.remove();
     const el = document.createElement("div");
     el.className = "todo-item-reminder";
-    el.id = `todo-${item.id}`;
+    el.id = `reminder-${item.id}`;
+
+    const actions = document.createElement("div");
+    actions.className = "todo-actions";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.className = "todo-done-btn";
+    cancelBtn.textContent = "取消";
+    cancelBtn.addEventListener("click", () => removeTodoItem(item.id));
+    actions.appendChild(cancelBtn);
 
     const text = document.createElement("span");
     text.className = "todo-text";
     text.textContent = item.taskText;
 
+    const badge = document.createElement("span");
+    badge.className = "reminder-badge";
+    badge.textContent = item.recurrence === "repeat" ? "循环" : "单次";
+
     const countdown = document.createElement("span");
     countdown.className = "todo-countdown";
 
-    const endAt = item.createdAt + (item.delayMinutes || 0) * 60000;
-
     function tick(): void {
-      const remaining = Math.max(0, endAt - Date.now());
+      const remaining = Math.max(0, getNextTriggerAt(item) - Date.now());
       if (remaining <= 0) {
         countdown.textContent = "00:00";
         return;
       }
-      const m = Math.floor(remaining / 60000);
+      const hours = Math.floor(remaining / 3600000);
+      const m = Math.floor((remaining % 3600000) / 60000);
       const s = Math.floor((remaining % 60000) / 1000);
-      countdown.textContent = `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+      countdown.textContent = hours > 0
+        ? `${String(hours).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+        : `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
     }
     tick();
     const intervalId = setInterval(tick, 1000);
     todoTimers.set(`${item.id}_tick`, intervalId as unknown as ReturnType<typeof setTimeout>);
 
+    el.appendChild(actions);
     el.appendChild(countdown);
+    el.appendChild(badge);
     el.appendChild(text);
-    list.prepend(el);
+    reminderList.prepend(el);
+  }
+
+  async function alertReminder(item: TodoItem): Promise<void> {
+    dismissActiveReminder?.();
+    const appWindow = getCurrentWindow();
+    const wasOnTop = isAlwaysOnTop;
+    if (!wasOnTop) await appWindow.setAlwaysOnTop(true);
+
+    reminderAudio = new Audio(new URL("../assets/audio/crunch.mp3", import.meta.url).href);
+    reminderAudio.loop = true;
+    reminderAudio.volume = Object.values(sfx)[0]?.volume ?? 0.6;
+    reminderAudio.play().catch(() => {});
+
+    const intervalText = formatDelay(item.delayMinutes!);
+    const prefix = item.recurrence === "repeat" ? `循环提醒（每${intervalText}）：` : "提醒：";
+    showSpeech(`${prefix}${item.taskText || "时间到了"}`, 999999);
+
+    const container = document.getElementById("pet-container");
+    container?.classList.add("reminder-pulse");
+    const hitbox = document.getElementById("pet-hitbox");
+    let dismissed = false;
+    const dismissReminder = (): void => {
+      if (dismissed) return;
+      dismissed = true;
+      reminderAudio?.pause();
+      reminderAudio = null;
+      container?.classList.remove("reminder-pulse");
+      document.getElementById("pet-speech-bubble")?.classList.remove("show-bubble");
+      if (!wasOnTop) void appWindow.setAlwaysOnTop(false);
+      hitbox?.removeEventListener("click", dismissReminder);
+      if (dismissActiveReminder === dismissReminder) dismissActiveReminder = null;
+    };
+    dismissActiveReminder = dismissReminder;
+    hitbox?.addEventListener("click", dismissReminder, { once: true });
   }
 
   function scheduleReminder(item: TodoItem): void {
     if (item.type !== "reminder" || !item.delayMinutes) return;
-    const ms = item.delayMinutes * 60000;
+    const ms = Math.max(0, getNextTriggerAt(item) - Date.now());
 
-    const timerId = setTimeout(async () => {
-      // 先取出 tick 定时器再清理 map
-      const tickTimer = todoTimers.get(`${item.id}_tick`);
-      todoTimers.delete(item.id);
-      todoTimers.delete(`${item.id}_tick`);
-      if (tickTimer) clearInterval(tickTimer);
-
-      // 置顶显示
-      const appWindow = getCurrentWindow();
-      const wasOnTop = isAlwaysOnTop;
-      if (!wasOnTop) await appWindow.setAlwaysOnTop(true);
-
-      // 循环播放 crunch 音效
-      reminderAudio = new Audio(new URL("../assets/audio/crunch.mp3", import.meta.url).href);
-      reminderAudio.loop = true;
-      reminderAudio.volume = Object.values(sfx)[0]?.volume ?? 0.6;
-      reminderAudio.play().catch(() => {});
-
-      const reminderMsg = item.taskText
-        ? `${formatDelay(item.delayMinutes!)}到啦，快去${item.taskText}吧`
-        : `${formatDelay(item.delayMinutes!)}到啦！`;
-      showSpeech(reminderMsg, 999999);
-
-      // 持续视觉反馈
-      const container = document.getElementById("pet-container");
-      if (container) container.classList.add("reminder-pulse");
-
-      // 用户点击宠物后结束提醒
-      const hitbox = document.getElementById("pet-hitbox");
-      let dismissed = false;
-      function dismissReminder(): void {
-        if (dismissed) return;
-        dismissed = true;
-
-        // 停止音效
-        if (reminderAudio) {
-          reminderAudio.pause();
-          reminderAudio = null;
-        }
-
-        // 移除视觉反馈
-        if (container) container.classList.remove("reminder-pulse");
-
-        // 隐藏气泡
-        const bubble = document.getElementById("pet-speech-bubble");
-        if (bubble) bubble.classList.remove("show-bubble");
-
-        // 恢复置顶状态
-        if (!wasOnTop) appWindow.setAlwaysOnTop(false);
-
-        hitbox?.removeEventListener("click", dismissReminder);
+    const timerId = setTimeout(() => {
+      clearTodoTimers(item.id);
+      void alertReminder(item);
+      if (item.recurrence === "repeat") {
+        item.nextTriggerAt = Date.now() + item.delayMinutes! * 60000;
+        upsertTodoItem(item);
+        renderReminderItem(item);
+        scheduleReminder(item);
+      } else {
+        removeTodoItem(item.id);
       }
-      hitbox?.addEventListener("click", dismissReminder, { once: true });
-
-      // 自动移除 DOM
-      const el = document.getElementById(`todo-${item.id}`);
-      if (el) {
-        el.style.opacity = "0";
-        el.style.transition = "opacity 0.3s";
-        setTimeout(() => el.remove(), 300);
-      }
-
-      // 清理 localStorage
-      const todos = (JSON.parse(localStorage.getItem(LS_TODOS) || "[]") as TodoItem[]).filter((t) => t.id !== item.id);
-      localStorage.setItem(LS_TODOS, JSON.stringify(todos));
     }, ms);
 
     todoTimers.set(item.id, timerId);
   }
 
-  async function handleSubmit(): Promise<void> {
+  function handleTodoSubmit(): void {
     const raw = input.value.trim();
     if (!raw) {
       panel.style.display = "none";
@@ -831,48 +1705,56 @@ function setupTodoPanel(): void {
     input.value = "";
     panel.style.display = "none";
 
-    const hasApi = !!localStorage.getItem(LS_API_ENDPOINT) && !!localStorage.getItem(LS_API_KEY);
-
-    let item: TodoItem | null;
-
-    if (!hasApi) {
-      // 无 API：直接作为记事本条目，跳过 AI 解析
-      item = {
-        id: `todo_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-        type: "note",
-        taskText: raw,
-        createdAt: Date.now(),
-        delayMinutes: null,
-      };
-    } else {
-      // 有 API：走 AI 意图解析
-      item = await parseTodoIntent(raw);
-    }
-
-    if (!item) return;
-
-    // 存储
-    const todos: TodoItem[] = JSON.parse(localStorage.getItem(LS_TODOS) || "[]");
-    todos.push(item);
-    localStorage.setItem(LS_TODOS, JSON.stringify(todos));
-
-    if (item.type === "reminder") {
-      renderReminderItem(item);
-      scheduleReminder(item);
-      showSpeech(`已设定 ${formatDelay(item.delayMinutes!)}后提醒`, 3000);
-    } else {
-      renderNoteItem(item);
-      showSpeech("已记录备忘", 2000);
-    }
+    const item: TodoItem = {
+      id: `todo_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      type: "note",
+      taskText: raw,
+      createdAt: Date.now(),
+      delayMinutes: null,
+    };
+    upsertTodoItem(item);
+    renderNoteItem(item);
+    showSpeech("已添加待办", 2000);
   }
 
-  submitBtn.addEventListener("click", handleSubmit);
+  function handleReminderSubmit(): void {
+    const raw = reminderInput.value.trim();
+    const amount = Number(reminderDelay.value);
+    if (!raw || !Number.isFinite(amount) || amount <= 0) {
+      showSpeech("请填写提醒内容和有效时间", 2400);
+      return;
+    }
+    const multiplier = reminderUnit.value === "hours" ? 60 : reminderUnit.value === "seconds" ? 1 / 60 : 1;
+    const delayMinutes = Math.max(amount * multiplier, 1 / 60);
+    const item: TodoItem = {
+      id: `reminder_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      type: "reminder",
+      taskText: raw,
+      createdAt: Date.now(),
+      delayMinutes,
+      recurrence: reminderRepeat.value === "repeat" ? "repeat" : "once",
+      nextTriggerAt: Date.now() + delayMinutes * 60000,
+    };
+    reminderInput.value = "";
+    reminderPanel.style.display = "none";
+    upsertTodoItem(item);
+    renderReminderItem(item);
+    scheduleReminder(item);
+    const kind = item.recurrence === "repeat" ? "循环提醒" : "提醒";
+    showSpeech(`已设定${kind}：${formatDelay(delayMinutes)}后`, 3000);
+  }
+
+  submitBtn.addEventListener("click", handleTodoSubmit);
   input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") handleSubmit();
+    if (e.key === "Enter") handleTodoSubmit();
+  });
+  reminderSubmit.addEventListener("click", handleReminderSubmit);
+  reminderInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") handleReminderSubmit();
   });
 
-  // 恢复已有待办，过滤掉过期的
-  const saved: TodoItem[] = JSON.parse(localStorage.getItem(LS_TODOS) || "[]");
+  // Older reminders were single-use items without recurrence or nextTriggerAt.
+  const saved = readTodoItems();
   const now = Date.now();
   const kept: TodoItem[] = [];
   for (const item of saved) {
@@ -880,17 +1762,19 @@ function setupTodoPanel(): void {
       renderNoteItem(item);
       kept.push(item);
     } else if (item.type === "reminder") {
-      const endAt = item.createdAt + (item.delayMinutes || 0) * 60000;
-      if (now < endAt) {
+      if (!item.delayMinutes || item.delayMinutes <= 0) continue;
+      item.recurrence = item.recurrence === "repeat" ? "repeat" : "once";
+      if (item.recurrence === "repeat" && getNextTriggerAt(item) <= now) {
+        item.nextTriggerAt = now + item.delayMinutes * 60000;
+      }
+      if (getNextTriggerAt(item) > now) {
         renderReminderItem(item);
         scheduleReminder(item);
         kept.push(item);
       }
     }
   }
-  if (kept.length !== saved.length) {
-    localStorage.setItem(LS_TODOS, JSON.stringify(kept));
-  }
+  writeTodoItems(kept);
 }
 
 async function checkGitHubStatus(): Promise<void> {
@@ -929,10 +1813,9 @@ async function triggerSmartSpeech(): Promise<void> {
   }
 
   let endpoint = localStorage.getItem(LS_API_ENDPOINT);
-  const apiKey = localStorage.getItem(LS_API_KEY);
+  const apiKey = await getApiKey();
 
   if (!endpoint || !apiKey) {
-    localStorage.setItem(LS_CHAT_MODE, "basic");
     showSpeech("请先配置 API 节点", 3000);
     return;
   }
@@ -965,6 +1848,7 @@ async function triggerSmartSpeech(): Promise<void> {
   const basePersona = personaMode === "custom"
     ? (localStorage.getItem(LS_CUSTOM_PERSONA) || PERSONA_MAP["tsundere"])
     : (PERSONA_MAP[personaMode] || PERSONA_MAP["tsundere"]);
+  const model = localStorage.getItem(LS_API_MODEL) || "gpt-3.5-turbo";
 
   const systemPrompt = `设定：${basePersona}\n当前系统时间：${timeString}。\n要求：请结合当前真实时间与你的设定，用不超过20个字回复或吐槽。严禁包含任何表情符号、颜文字或多余的解释。`;
 
@@ -976,7 +1860,7 @@ async function triggerSmartSpeech(): Promise<void> {
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: localStorage.getItem(LS_API_MODEL) || "gpt-3.5-turbo",
+        model,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: "现在请跟我打招呼或者吐槽我。" },
@@ -997,8 +1881,8 @@ async function triggerSmartSpeech(): Promise<void> {
     }
   } catch (err) {
     console.error("LLM request failed:", err);
-    showSpeech("API 连不上，还是聊聊天吧", 3000);
-    fetchHitokoto();
+    lastSmartSpeechTimestamp = nowTs;
+    showSpeech("大模型调用失败，先聊聊天吧", 4000);
   }
 }
 
@@ -1012,17 +1896,25 @@ function fetchHitokoto(): void {
     .catch(() => {});
 }
 
+function activeModeAnimationState(engine: PetEngine): string | null {
+  if (isMeritMode && engine.hasState("merit")) return "merit";
+  if (isFocusMode) return engine.hasState("focus") ? "focus" : "review";
+  if (isMusicRhythmMode && engine.hasState("music")) return "music";
+  return null;
+}
+
 function forceEndDrag(engine: PetEngine, container: HTMLElement): void {
   const didDrag = hasStartedDragging;
   if (manualDragFrame !== null) {
     window.cancelAnimationFrame(manualDragFrame);
     manualDragFrame = null;
   }
+  manualDragSessionId += 1;
   if (hasStartedDragging) {
-    engine.applyState("idle");
+    engine.applyState(activeModeAnimationState(engine) ?? "idle");
     container.classList.remove("is-lifting");
+    container.classList.remove("is-dragging");
     container.classList.add("is-dropping");
-    if (!isFocusMode) playSound("boing");
     setTimeout(() => {
       container.classList.remove("is-dropping");
     }, 200);
@@ -1039,6 +1931,42 @@ function forceEndDrag(engine: PetEngine, container: HTMLElement): void {
 
 function startManualWindowDrag(engine: PetEngine, container: HTMLElement): void {
   const appWindow = getCurrentWindow();
+  const boundsPromise = Promise.all([appWindow.outerSize(), getRoamBounds()]);
+  const dragSessionId = ++manualDragSessionId;
+  let isMoveInFlight = false;
+  let lastDragWindowX = Number.NaN;
+  let lastDragWindowY = Number.NaN;
+  let queuedWindowPosition: { x: number; y: number } | null = null;
+
+  container.classList.add("is-dragging");
+
+  const applyLatestWindowPosition = (): void => {
+    if (isMoveInFlight || !queuedWindowPosition) return;
+    if (dragSessionId !== manualDragSessionId || !isMouseDown || !hasStartedDragging || isExiting) {
+      queuedWindowPosition = null;
+      return;
+    }
+
+    const next = queuedWindowPosition;
+    queuedWindowPosition = null;
+    if (next.x === lastDragWindowX && next.y === lastDragWindowY) {
+      applyLatestWindowPosition();
+      return;
+    }
+
+    lastDragWindowX = next.x;
+    lastDragWindowY = next.y;
+    isMoveInFlight = true;
+    void appWindow.setPosition(new PhysicalPosition(next.x, next.y))
+      .catch((err) => {
+        console.warn("manual drag failed:", err);
+        forceEndDrag(engine, container);
+      })
+      .finally(() => {
+        isMoveInFlight = false;
+        applyLatestWindowPosition();
+      });
+  };
 
   const dragLoop = () => {
     if (!isMouseDown || !hasStartedDragging || isExiting) {
@@ -1046,11 +1974,24 @@ function startManualWindowDrag(engine: PetEngine, container: HTMLElement): void 
       return;
     }
 
-    cursorPosition()
-      .then((pos) => appWindow.setPosition(new PhysicalPosition(
-        Math.round(pos.x - dragOffsetX),
-        Math.round(pos.y - dragOffsetY),
-      )))
+    void cursorPosition()
+      .then(async (pos) => {
+        const [size, bounds] = await boundsPromise;
+        if (dragSessionId !== manualDragSessionId || !isMouseDown || !hasStartedDragging || isExiting) return;
+        const nextPosition = clampPetVisualWindowPositionToBounds(
+          pos.x - dragOffsetX,
+          pos.y - dragOffsetY,
+          size.width,
+          size.height,
+          bounds,
+        );
+        const nextX = nextPosition.x;
+        const nextY = nextPosition.y;
+        updateLastKnownCursor(pos.x, pos.y);
+        if (dragSessionId !== manualDragSessionId || !isMouseDown || !hasStartedDragging || isExiting) return;
+        queuedWindowPosition = { x: nextX, y: nextY };
+        applyLatestWindowPosition();
+      })
       .catch((err) => {
         console.warn("manual drag failed:", err);
         forceEndDrag(engine, container);
@@ -1063,6 +2004,126 @@ function startManualWindowDrag(engine: PetEngine, container: HTMLElement): void 
   };
 
   manualDragFrame = window.requestAnimationFrame(dragLoop);
+}
+
+function updateLastKnownCursor(x: number, y: number): void {
+  if (x !== lastKnownCursorX || y !== lastKnownCursorY) {
+    lastKnownCursorX = x;
+    lastKnownCursorY = y;
+    lastActivityTime = Date.now();
+  }
+}
+
+function applySpriteFacing(facing: "left" | "right"): void {
+  if (lastSpriteFacing === facing) return;
+  const spriteEl = document.getElementById("pet-sprite");
+  if (!spriteEl) return;
+  lastSpriteFacing = facing;
+  spriteEl.style.transform = facing === "left" ? "scaleX(-1)" : "scaleX(1)";
+}
+
+function isElementVisible(el: HTMLElement): boolean {
+  const style = window.getComputedStyle(el);
+  const rect = el.getBoundingClientRect();
+  return style.display !== "none"
+    && style.visibility !== "hidden"
+    && style.opacity !== "0"
+    && rect.width > 0
+    && rect.height > 0;
+}
+
+function isPointInRect(x: number, y: number, rect: DOMRect): boolean {
+  return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+}
+
+function isBlockingPetPanelOpen(): boolean {
+  const panelIds = [
+    "pet-context-menu",
+    "volume-panel",
+    "size-panel",
+    "focus-panel",
+    "merit-panel",
+    "api-settings-panel",
+    "custom-persona-panel",
+    "github-settings-panel",
+    "todo-panel",
+    "reminder-panel",
+  ];
+  return panelIds.some((id) => {
+    const panel = document.getElementById(id) as HTMLElement | null;
+    return !!panel && isElementVisible(panel);
+  });
+}
+
+function isPointOverInteractivePetArea(x: number, y: number): boolean {
+  const hitbox = document.getElementById("pet-hitbox") as HTMLElement | null;
+  if (hitbox && isPointInRect(x, y, hitbox.getBoundingClientRect())) return true;
+
+  return [
+    "pet-context-menu",
+    "volume-panel",
+    "size-panel",
+    "focus-panel",
+    "merit-panel",
+    "api-settings-panel",
+    "custom-persona-panel",
+    "github-settings-panel",
+    "todo-panel",
+    "reminder-panel",
+  ].some((id) => {
+    const panel = document.getElementById(id) as HTMLElement | null;
+    return !!panel && isElementVisible(panel) && isPointInRect(x, y, panel.getBoundingClientRect());
+  });
+}
+
+async function setCursorPassthrough(ignore: boolean): Promise<void> {
+  if (isWindowIgnoringCursor === ignore) return;
+  isWindowIgnoringCursor = ignore;
+  try {
+    await getCurrentWindow().setIgnoreCursorEvents(ignore);
+  } catch (err) {
+    console.warn("setIgnoreCursorEvents failed:", err);
+  }
+}
+
+function setupCursorPassthrough(): void {
+  const appWindow = getCurrentWindow();
+  let inFlight = false;
+  let cachedScaleFactor = 1;
+  let lastScaleRefreshAt = 0;
+
+  window.setInterval(() => {
+    if (isExiting || inFlight) return;
+
+    inFlight = true;
+    const now = Date.now();
+    const scalePromise = now - lastScaleRefreshAt > 3000
+      ? appWindow.scaleFactor().then((scaleFactor) => {
+          cachedScaleFactor = scaleFactor;
+          lastScaleRefreshAt = now;
+          return scaleFactor;
+        })
+      : Promise.resolve(cachedScaleFactor);
+
+    void Promise.all([
+      cursorPosition(),
+      appWindow.outerPosition(),
+      scalePromise,
+    ]).then(([cursor, position, scaleFactor]) => {
+      updateLastKnownCursor(cursor.x, cursor.y);
+      const localX = (cursor.x - position.x) / scaleFactor;
+      const localY = (cursor.y - position.y) / scaleFactor;
+      const needsPetInput = isManualPetControlActive()
+        || isPetMenuOpen
+        || isPetPanelOpen
+        || isPointOverInteractivePetArea(localX, localY);
+      void setCursorPassthrough(!needsPetInput);
+    }).catch(() => {
+      void setCursorPassthrough(false);
+    }).finally(() => {
+      inFlight = false;
+    });
+  }, 96);
 }
 
 // ── Idle Roaming Physics ──
@@ -1098,6 +2159,9 @@ interface RoamState {
   nextDecisionAt: number;
   lastFrameAt: number;
   lastPlatformScanAt: number;
+  lastWindowSyncAt: number;
+  lastAppliedWindowX: number;
+  lastAppliedWindowY: number;
   platforms: RoamPlatform[];
   bounds: RoamBounds;
 }
@@ -1134,6 +2198,30 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+function clampWindowPositionToBounds(x: number, y: number, width: number, height: number, bounds: RoamBounds): { x: number; y: number } {
+  const minX = bounds.left;
+  const maxX = bounds.right - width;
+  const minY = bounds.top;
+  const maxY = bounds.bottom - height;
+  return {
+    x: Math.round(clamp(x, Math.min(minX, maxX), Math.max(minX, maxX))),
+    y: Math.round(clamp(y, Math.min(minY, maxY), Math.max(minY, maxY))),
+  };
+}
+
+function clampPetVisualWindowPositionToBounds(x: number, y: number, width: number, height: number, bounds: RoamBounds): { x: number; y: number } {
+  const visualRect = getPetVisualRectInWindow(width, height);
+  const desiredVisualLeft = x + visualRect.left;
+  const desiredVisualTop = y + visualRect.top;
+  const clampedVisualLeft = clamp(desiredVisualLeft, bounds.left, bounds.right - visualRect.width);
+  const clampedVisualTop = clamp(desiredVisualTop, bounds.top, bounds.bottom - visualRect.height);
+  setPetWindowOffset(0, 0);
+  return {
+    x: Math.round(clampedVisualLeft - visualRect.left),
+    y: Math.round(clampedVisualTop - visualRect.top),
+  };
+}
+
 function weightedRoamDecision(): (typeof ROAM_DECISIONS)[number]["action"] {
   let weight = Math.random() * ROAM_DECISIONS.reduce((sum, item) => sum + item.weight, 0);
   for (const item of ROAM_DECISIONS) {
@@ -1145,12 +2233,15 @@ function weightedRoamDecision(): (typeof ROAM_DECISIONS)[number]["action"] {
 
 function canAutoRoam(): boolean {
   return !isExiting
+    && !isRecallAnimating
     && !isMouseDown
     && !hasStartedDragging
     && !isDraggingInProgress
     && !isPetMenuOpen
     && !isPetPanelOpen
+    && !isBlockingPetPanelOpen()
     && !isFocusMode
+    && !isMeritMode
     && !isPetHovered
     && Date.now() - lastPetInteractionTime >= ROAM_IDLE_DELAY_MS;
 }
@@ -1162,11 +2253,18 @@ function isManualPetControlActive(): boolean {
 function shouldFreezeRoamPhysics(state: RoamState): boolean {
   const recentlyDragged = Date.now() - lastDragEndTime < 900;
   return isExiting
+    || isRecallAnimating
     || isFocusMode
+    || isMeritMode
     || isManualPetControlActive()
     || isPetMenuOpen
     || isPetPanelOpen
+    || isBlockingPetPanelOpen()
     || (isPetHovered && state.grounded && !recentlyDragged);
+}
+
+function shouldPauseRoamDecisions(): boolean {
+  return !canAutoRoam();
 }
 
 function setRoamAction(engine: PetEngine, state: RoamState, action: RoamAction): void {
@@ -1176,9 +2274,7 @@ function setRoamAction(engine: PetEngine, state: RoamState, action: RoamAction):
 }
 
 function applyRoamFacing(state: RoamState): void {
-  const spriteEl = document.getElementById("pet-sprite");
-  if (!spriteEl) return;
-  spriteEl.style.transform = state.facing === "left" ? "scaleX(-1)" : "scaleX(1)";
+  applySpriteFacing(state.facing);
 }
 
 async function syncRoamStateFromWindow(engine: PetEngine, state: RoamState, makeFall: boolean): Promise<void> {
@@ -1187,15 +2283,17 @@ async function syncRoamStateFromWindow(engine: PetEngine, state: RoamState, make
     appWindow.outerPosition(),
     appWindow.outerSize(),
   ]);
-  const nextX = position.x + size.width / 2;
-  const nextY = position.y + size.height;
+  const nextX = position.x + size.width / 2 + petWindowOffsetX;
+  const nextY = position.y + size.height - petWindowOffsetBottom;
   const moved = Math.abs(nextX - state.x) > 2 || Math.abs(nextY - state.y) > 2 || size.width !== state.width || size.height !== state.height;
 
   state.x = nextX;
   state.y = nextY;
   state.width = size.width;
   state.height = size.height;
+  state.lastWindowSyncAt = performance.now();
   clampRoamToBounds(state);
+  await applyRoamWindowPosition(state);
 
   if (makeFall && moved) {
     state.grounded = false;
@@ -1251,6 +2349,18 @@ async function getRoamBounds(): Promise<RoamBounds> {
   };
 }
 
+async function clampCurrentWindowToRoamBounds(): Promise<void> {
+  const appWindow = getCurrentWindow();
+  const [position, size, bounds] = await Promise.all([
+    appWindow.outerPosition(),
+    appWindow.outerSize(),
+    getRoamBounds(),
+  ]);
+  const nextPosition = clampWindowPositionToBounds(position.x, position.y, size.width, size.height, bounds);
+  if (nextPosition.x === position.x && nextPosition.y === position.y) return;
+  await appWindow.setPosition(new PhysicalPosition(nextPosition.x, nextPosition.y));
+}
+
 async function scanRoamPlatforms(bounds: RoamBounds): Promise<RoamPlatform[]> {
   try {
     const platforms = await invoke<RoamPlatform[]>("list_desktop_platforms");
@@ -1280,8 +2390,21 @@ function chooseLeapTarget(state: RoamState): RoamPlatform | null {
 function chooseNextRoamAction(engine: PetEngine, state: RoamState, now: number): void {
   if (now < state.nextDecisionAt) return;
 
+  const activityLevel = localStorage.getItem("pet_activity_level") || "middle";
+  let decision = weightedRoamDecision();
+
+  if (activityLevel === "quiet") {
+    if (decision === "walkLeft" || decision === "walkRight" || decision === "runLeft" || decision === "runRight" || decision === "jump") {
+      decision = "idle";
+    }
+  } else if (activityLevel === "middle") {
+    if (decision === "jump") {
+      decision = "idle";
+    }
+  }
+
   let duration = randomBetween(1000, 2400);
-  switch (weightedRoamDecision()) {
+  switch (decision) {
     case "walkLeft":
       state.facing = "left";
       state.vx = -randomBetween(65, 120);
@@ -1371,12 +2494,52 @@ function updateRoamPlatformAttachment(state: RoamState): void {
   }
 }
 
+function findStandingPlatform(state: RoamState): RoamPlatform | null {
+  const left = state.x - state.width / 2;
+  const right = state.x + state.width / 2;
+  const footTolerance = 10;
+  return state.platforms.find((platform) => {
+    const hasHorizontalOverlap = right > platform.left + 8 && left < platform.right - 8;
+    return hasHorizontalOverlap && Math.abs(state.y - platform.top) <= footTolerance;
+  }) ?? null;
+}
+
+function refreshGroundingAfterDrag(engine: PetEngine, state: RoamState): void {
+  const standingPlatform = findStandingPlatform(state);
+  if (standingPlatform) {
+    settleRoamOnPlatform(engine, state, standingPlatform);
+    return;
+  }
+
+  if (Math.abs(state.y - state.bounds.bottom) <= 3) {
+    state.y = state.bounds.bottom;
+    state.vy = 0;
+    state.grounded = true;
+    state.platformId = "__ground__";
+    return;
+  }
+
+  state.grounded = false;
+  state.platformId = "";
+  state.vy = Math.max(state.vy, 180);
+  setRoamAction(engine, state, "fall");
+}
+
 async function applyRoamWindowPosition(state: RoamState): Promise<void> {
-  const appWindow = getCurrentWindow();
-  await appWindow.setPosition(new PhysicalPosition(
-    Math.round(state.x - state.width / 2),
-    Math.round(state.y - state.height),
-  ));
+  const position = clampWindowPositionToBounds(
+    state.x - state.width / 2 - petWindowOffsetX,
+    state.y - state.height + petWindowOffsetBottom,
+    state.width,
+    state.height,
+    state.bounds,
+  );
+  const nextX = position.x;
+  const nextY = position.y;
+  if (nextX === state.lastAppliedWindowX && nextY === state.lastAppliedWindowY) return;
+
+  state.lastAppliedWindowX = nextX;
+  state.lastAppliedWindowY = nextY;
+  await getCurrentWindow().setPosition(new PhysicalPosition(nextX, nextY));
 }
 
 async function tickIdleRoaming(engine: PetEngine, state: RoamState, now: number): Promise<void> {
@@ -1384,28 +2547,54 @@ async function tickIdleRoaming(engine: PetEngine, state: RoamState, now: number)
   const dt = Math.min(0.08, Math.max(0.001, (now - state.lastFrameAt) / 1000));
   state.lastFrameAt = now;
 
-  if (now - state.lastPlatformScanAt > 1200) {
+  const recentlyDragged = Date.now() - lastDragEndTime < 1200;
+  const shouldSyncWindow = now - state.lastWindowSyncAt > 220;
+  const customMusicStateActive = isMusicRhythmMode && engine.hasState("music");
+  if (shouldFreezeRoamPhysics(state) || customMusicStateActive) {
+    if (shouldSyncWindow) await syncRoamStateFromWindow(engine, state, false);
+    state.vx = 0;
+    state.nextDecisionAt = now + 500;
+    if (!isMeritMode) {
+      const fixedState = activeModeAnimationState(engine) ?? "idle";
+      if (engine.currentState !== fixedState) engine.applyState(fixedState);
+      state.action = fixedState === "idle" ? "idle" : "review";
+    }
+    return;
+  }
+
+  const pauseRoamDecisions = shouldPauseRoamDecisions();
+  if (pauseRoamDecisions && shouldSyncWindow) {
+    await syncRoamStateFromWindow(engine, state, recentlyDragged);
+  }
+
+  if (recentlyDragged && now - state.lastPlatformScanAt > 120) {
     state.bounds = await getRoamBounds();
     state.platforms = await scanRoamPlatforms(state.bounds);
     state.lastPlatformScanAt = now;
-    clampRoamToBounds(state);
+    refreshGroundingAfterDrag(engine, state);
+  } else if (recentlyDragged) {
+    refreshGroundingAfterDrag(engine, state);
   }
 
-  if (shouldFreezeRoamPhysics(state)) {
-    await syncRoamStateFromWindow(engine, state, false);
+  if (pauseRoamDecisions && state.grounded) {
     state.vx = 0;
     state.nextDecisionAt = now + 500;
     if (state.grounded) setRoamAction(engine, state, "idle");
     return;
   }
 
-  if (!canAutoRoam()) {
-    await syncRoamStateFromWindow(engine, state, Date.now() - lastDragEndTime < 1200);
+  if (now - state.lastPlatformScanAt > 3500) {
+    state.bounds = await getRoamBounds();
+    state.platforms = await scanRoamPlatforms(state.bounds);
+    state.lastPlatformScanAt = now;
+    clampRoamToBounds(state);
+  }
+
+  if (!pauseRoamDecisions) {
+    chooseNextRoamAction(engine, state, now);
+  } else {
     state.vx = 0;
     state.nextDecisionAt = now + 500;
-    if (state.grounded) setRoamAction(engine, state, "idle");
-  } else {
-    chooseNextRoamAction(engine, state, now);
   }
 
   if (!state.grounded) {
@@ -1484,6 +2673,9 @@ async function setupIdleRoaming(engine: PetEngine): Promise<void> {
     nextDecisionAt: performance.now() + 900,
     lastFrameAt: 0,
     lastPlatformScanAt: 0,
+    lastWindowSyncAt: 0,
+    lastAppliedWindowX: position.x,
+    lastAppliedWindowY: position.y,
     platforms: [],
     bounds,
   };
@@ -1503,7 +2695,11 @@ async function setupDrag(engine: PetEngine): Promise<void> {
 
   // mousedown - 潜伏阶段
   hitbox.addEventListener("mousedown", (e) => {
-    if (e.button !== 0 || isExiting || isDraggingInProgress) return;
+    if (e.button !== 0 || isExiting || isRecallAnimating || isDraggingInProgress) return;
+    if (isFocusMode) {
+      showSpeech("专注中，先把工作做完", 1800);
+      return;
+    }
 
     isMouseDown = true;
     hasStartedDragging = false;
@@ -1524,7 +2720,7 @@ async function setupDrag(engine: PetEngine): Promise<void> {
       return;
     }
 
-    if (!isMouseDown || hasStartedDragging || isExiting || isDraggingInProgress) return;
+    if (!isMouseDown || hasStartedDragging || isExiting || isRecallAnimating || isDraggingInProgress) return;
 
     const dx = e.clientX - mouseDownX;
     const dy = e.clientY - mouseDownY;
@@ -1558,9 +2754,7 @@ async function setupDrag(engine: PetEngine): Promise<void> {
     } else {
       container.classList.remove("is-lifting");
       if (isFocusMode) {
-        isBubbleLocked = true;
         showSpeech("嘘，专心工作...", 2000);
-        setTimeout(() => { isBubbleLocked = false; }, 2000);
       } else {
         spawnParticles(e.clientX, e.clientY);
         playSound("pop");
@@ -1577,7 +2771,62 @@ async function setupDrag(engine: PetEngine): Promise<void> {
 
 // ── Pet Loading ──
 
-async function loadSpritesheetUrl(): Promise<string> {
+function atlasFromManifest(manifest: PetManifest | null): PetAtlas {
+  const animations = {
+    ...CODEX_ATLAS.animations,
+    ...(manifest?.animations || {}),
+  };
+  const rows = Math.max(
+    CODEX_ATLAS.rows,
+    ...Object.values(animations).map((animation) => animation.row + 1),
+  );
+  const atlas = {
+    ...CODEX_ATLAS,
+    rows,
+    animations,
+  };
+  console.log("Pet atlas loaded", {
+    pet: manifest?.id || "builtin",
+    spritesheet: manifest?.spritesheetPath || "builtin",
+    states: Object.keys(animations),
+    hasMerit: Boolean(animations.merit),
+  });
+  return atlas;
+}
+
+async function loadPetAssets(): Promise<{ spritesheetUrl: string; manifest: PetManifest | null }> {
+  const params = new URLSearchParams(window.location.search);
+  const windowLabel = getCurrentWindow().label;
+  const summonedPetId = /^pet-(.+)-\d+$/.exec(windowLabel)?.[1] ?? null;
+  const primaryPetId = windowLabel === "pet"
+    ? localStorage.getItem(LS_PRIMARY_PET_ID) || "ikun-pet"
+    : null;
+  const projectPetId = params.get("petId") || summonedPetId || primaryPetId;
+  if (projectPetId === "ikun-pet") {
+    return {
+      spritesheetUrl: new URL("../builtin-pets/ikun-pet/spritesheet.webp", import.meta.url).href,
+      manifest: null,
+    };
+  }
+  if (projectPetId) {
+    try {
+      const petDir = await invoke<string>("get_project_pet_dir", { petId: projectPetId });
+      const content = await invoke<PetManifest>("read_project_pet_manifest", { petId: projectPetId });
+      const spritesheetPath = `${petDir}/${content.spritesheetPath}`;
+      const url = `${convertFileSrc(spritesheetPath)}?v=${Date.now()}`;
+      console.log("Loading project pet", {
+        requestedPetId: projectPetId,
+        manifestId: content.id,
+        spritesheetPath: content.spritesheetPath,
+        hasMerit: Boolean(content.animations?.merit),
+        url,
+      });
+      return { spritesheetUrl: url, manifest: content };
+    } catch (e) {
+      console.warn("Project pet failed to load, using fallback:", e);
+    }
+  }
+
   try {
     const pets = await invoke<PetManifest[]>("list_pets");
     if (pets.length > 0) {
@@ -1589,111 +2838,192 @@ async function loadSpritesheetUrl(): Promise<string> {
       const spritesheetPath = `${petDir}/${pet.spritesheetPath}`;
       const url = convertFileSrc(spritesheetPath);
       console.log(`Loading pet: ${pet.displayName} from ${url}`);
-      return url;
+      return { spritesheetUrl: url, manifest: pet };
     }
   } catch (e) {
     console.warn("No imported pets found, using fallback:", e);
   }
 
   // Fallback: local test spritesheet
-  return new URL("./spritesheet.webp", import.meta.url).href;
+  return { spritesheetUrl: new URL("./spritesheet.webp", import.meta.url).href, manifest: null };
+}
+
+const RECALL_EFFECT_CLASSES = ["recall-portal", "recall-dust", "recall-shadow-sink", "recall-light-fold"] as const;
+type RecallEffectClass = typeof RECALL_EFFECT_CLASSES[number];
+
+function resetRecallDisappearEffect(container: HTMLElement): void {
+  container.classList.remove("recall-disappearing", ...RECALL_EFFECT_CLASSES);
+  container.style.removeProperty("--recall-drift-x");
+  container.style.removeProperty("--recall-tilt");
+  container.style.removeProperty("--recall-duration");
+}
+
+function randomRecallEffectClass(): RecallEffectClass {
+  return RECALL_EFFECT_CLASSES[Math.floor(Math.random() * RECALL_EFFECT_CLASSES.length)];
+}
+
+function playRecallDisappearEffect(): Promise<void> {
+  const container = document.getElementById("pet-container") as HTMLElement | null;
+  if (!container) return Promise.resolve();
+
+  resetRecallDisappearEffect(container);
+  const effect = randomRecallEffectClass();
+  const duration = 860 + Math.round(Math.random() * 260);
+  const startedAt = Date.now();
+  container.style.setProperty("--recall-drift-x", `${Math.round((Math.random() * 2 - 1) * 24)}px`);
+  container.style.setProperty("--recall-tilt", `${(Math.random() * 10 - 5).toFixed(1)}deg`);
+  container.style.setProperty("--recall-duration", `${duration}ms`);
+  void container.offsetWidth;
+  container.classList.add("recall-disappearing", effect);
+
+  return new Promise((resolve) => {
+    let resolved = false;
+    const finish = (): void => {
+      if (resolved) return;
+      resolved = true;
+      container.removeEventListener("animationend", onAnimationEnd);
+      resolve();
+    };
+    const onAnimationEnd = (): void => {
+      if (Date.now() - startedAt >= duration * 0.78) finish();
+    };
+    container.addEventListener("animationend", onAnimationEnd);
+    window.setTimeout(finish, duration + 180);
+  });
+}
+
+async function recallCurrentPet(): Promise<void> {
+  if (isRecallAnimating) return;
+  const appWindow = getCurrentWindow();
+  const label = appWindow.label;
+  const summonedPetId = /^pet-(.+)-\d+$/.exec(label)?.[1] ?? null;
+  const container = document.getElementById("pet-container") as HTMLElement | null;
+  try {
+    if (await getVisiblePetCount() <= 1) return;
+    isRecallAnimating = true;
+    isPetMenuOpen = false;
+    lastPetInteractionTime = Date.now();
+    await playRecallDisappearEffect();
+    if (container) container.style.visibility = "hidden";
+    if (label === "pet") {
+      await invoke("hide_primary_pet_window");
+      if (container) {
+        resetRecallDisappearEffect(container);
+        container.style.removeProperty("visibility");
+      }
+      isRecallAnimating = false;
+      notifyPetWindowStateChanged();
+      return;
+    }
+    if (summonedPetId) {
+      removeOneSavedSummonedPetId(summonedPetId);
+      await invoke("close_summoned_pet_window", { label });
+      notifyPetWindowStateChanged();
+      return;
+    }
+    if (container) {
+      resetRecallDisappearEffect(container);
+      container.style.removeProperty("visibility");
+    }
+    isRecallAnimating = false;
+  } catch (err) {
+    console.warn("recall current pet failed:", err);
+    if (container) {
+      resetRecallDisappearEffect(container);
+      container.style.removeProperty("visibility");
+    }
+    isRecallAnimating = false;
+  }
+}
+
+async function getVisiblePetCount(): Promise<number> {
+  const [summoned, primaryVisible] = await Promise.all([
+    invoke<Array<{ label: string; petId: string }>>("list_summoned_pet_windows"),
+    invoke<boolean>("is_primary_pet_window_visible"),
+  ]);
+  return summoned.length + (primaryVisible ? 1 : 0);
 }
 
 // ── Context Menu (Custom DOM) ──
 
-async function openImportDialog(engine: PetEngine): Promise<void> {
-  try {
-    const { open } = await import("@tauri-apps/plugin-dialog");
-    const file = await open({
-      multiple: false,
-      filters: [{ name: "宠物包", extensions: ["zip"] }],
-    });
-    if (!file) return;
-
-    const manifest = await invoke<PetManifest>("import_pet_zip", { zipPath: file });
-    console.log(`Imported: ${manifest.displayName}`);
-
-    const petDir = await invoke<string>("get_pet_dir", { petId: manifest.id });
-    const url = convertFileSrc(`${petDir}/${manifest.spritesheetPath}`);
-    engine.setSpritesheet(url);
-    localStorage.setItem("current_pet_id", manifest.id);
-  } catch (e) {
-    console.error("Import failed:", e);
-  }
-}
-
-async function startFocusMode(minutes: number, engine: PetEngine): Promise<void> {
-  if (focusIntervalId) {
-    clearInterval(focusIntervalId);
-    focusIntervalId = null;
-  }
-  const appWindow = getCurrentWindow();
-  cachedAlwaysOnTop = isAlwaysOnTop;
-  await appWindow.setAlwaysOnTop(false);
-
-  isFocusMode = true;
-  engine.applyState("waiting");
-  focusEndTime = Date.now() + minutes * 60000;
-
-  // 显示开始提示并锁定气泡，防止倒计时覆盖
-  isBubbleLocked = true;
-  showSpeech(`专注 ${minutes} 分钟，开始！`, 3000);
-  setTimeout(() => { isBubbleLocked = false; }, 3000);
-
-  // 延迟 3 秒后再启动倒计时轮询，避免覆盖开始提示
-  setTimeout(() => {
-    // 先用极大时长显示气泡，使其进入稳定显示状态
-    showSpeech("专注中...", 9999999);
-
-    focusIntervalId = setInterval(async () => {
-      const remaining = Math.max(0, focusEndTime - Date.now());
-      if (remaining <= 0) {
-        await endFocusMode(true, engine);
-        return;
-      }
-      const min = Math.floor(remaining / 60000);
-      const sec = Math.floor((remaining % 60000) / 1000);
-      if (!isBubbleLocked) {
-        // 直接刷新文字内容，不重新触发 CSS 气泡动画，避免闪烁
-        const bubbleText = document.querySelector("#pet-speech-bubble .bubble-text") as HTMLElement | null;
-        if (bubbleText) {
-          bubbleText.textContent = `专注中 ${min}:${sec.toString().padStart(2, "0")}`;
-        }
-      }
-    }, 1000);
-  }, 3000);
-}
-
-async function endFocusMode(_isAuto: boolean, engine: PetEngine): Promise<void> {
-  if (focusIntervalId) {
-    clearInterval(focusIntervalId);
-    focusIntervalId = null;
-  }
-  if (_isAuto) playSound("bell");
-  isFocusMode = false;
-  isBubbleLocked = false;
-
-  const appWindow = getCurrentWindow();
-  await appWindow.setAlwaysOnTop(true);
-  engine.applyState("jumping");
-  showSpeech("专注结束，辛苦啦！", 4000);
-
-  setTimeout(async () => {
-    if (!isExiting) {
-      engine.applyState("idle");
-      await appWindow.setAlwaysOnTop(cachedAlwaysOnTop);
-    }
-  }, 4000);
-}
-
 async function setupContextMenu(engine: PetEngine): Promise<void> {
-  const { Menu, Submenu, CheckMenuItem } = await import("@tauri-apps/api/menu");
   const appWindow = getCurrentWindow();
   const hitbox = document.getElementById("pet-hitbox");
-  if (!hitbox) return;
+  const menu = document.getElementById("pet-context-menu") as HTMLElement | null;
+  const managerButton = document.getElementById("context-manager") as HTMLButtonElement | null;
+  const reminderButton = document.getElementById("context-reminder") as HTMLButtonElement | null;
+  const todoButton = document.getElementById("context-todo") as HTMLButtonElement | null;
+  const focusButton = document.getElementById("context-focus") as HTMLButtonElement | null;
+  const meritButton = document.getElementById("context-merit") as HTMLButtonElement | null;
+  const musicButton = document.getElementById("context-music") as HTMLButtonElement | null;
+  const recallButton = document.getElementById("context-recall") as HTMLButtonElement | null;
+  const quitButton = document.getElementById("context-quit") as HTMLButtonElement | null;
+  if (!hitbox || !menu || !managerButton || !reminderButton || !todoButton || !focusButton || !meritButton || !musicButton || !recallButton || !quitButton) return;
 
   // Apply persisted always-on-top state on startup
   await appWindow.setAlwaysOnTop(isAlwaysOnTop);
+
+  const hideMenu = (): void => {
+    menu.classList.remove("show");
+    menu.setAttribute("aria-hidden", "true");
+    window.setTimeout(() => {
+      if (!menu.classList.contains("show")) {
+        isPetMenuOpen = false;
+        lastPetInteractionTime = Date.now();
+      }
+    }, 160);
+  };
+
+  const positionMenu = (): void => {
+    menu.style.visibility = "hidden";
+    menu.classList.add("show");
+    const menuRect = menu.getBoundingClientRect();
+    const petRect = document.getElementById("pet-container")?.getBoundingClientRect();
+    const gap = 10;
+    const margin = 8;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const baseTop = petRect
+      ? petRect.top + Math.max(8, petRect.height * 0.08)
+      : margin;
+
+    let left = petRect ? petRect.right + gap : margin;
+    if (left + menuRect.width + margin > viewportWidth && petRect) {
+      left = petRect.left - menuRect.width - gap;
+    }
+    if (left < margin) {
+      left = Math.min(viewportWidth - menuRect.width - margin, margin);
+    }
+
+    const top = Math.min(
+      Math.max(margin, baseTop),
+      Math.max(margin, viewportHeight - menuRect.height - margin),
+    );
+
+    menu.style.left = `${Math.round(left)}px`;
+    menu.style.top = `${Math.round(top)}px`;
+    menu.style.visibility = "";
+  };
+
+  const updateRecallVisibility = async (): Promise<void> => {
+    try {
+      const visiblePetCount = await getVisiblePetCount();
+      recallButton.style.display = visiblePetCount > 1 ? "" : "none";
+    } catch (err) {
+      console.warn("pet count check failed:", err);
+      recallButton.style.display = "none";
+    }
+  };
+
+  const showMenu = async (): Promise<void> => {
+    isPetMenuOpen = true;
+    if (!isMeritMode) engine.applyState("idle");
+    lastActivityTime = Date.now();
+    lastPetInteractionTime = Date.now();
+    await updateRecallVisibility();
+    positionMenu();
+    menu.setAttribute("aria-hidden", "false");
+  };
 
   hitbox.addEventListener("mouseenter", () => {
     isPetHovered = true;
@@ -1707,135 +3037,70 @@ async function setupContextMenu(engine: PetEngine): Promise<void> {
 
   hitbox.addEventListener("contextmenu", async (e) => {
     e.preventDefault();
-    if (isExiting) return;
+    if (isExiting || isRecallAnimating) return;
 
+    void showMenu();
+  });
+
+  managerButton.addEventListener("click", () => {
+    hideMenu();
+    void invoke("open_manager_window");
+  });
+
+  todoButton.addEventListener("click", () => {
+    hideMenu();
+    showTodoPanel();
+  });
+
+  reminderButton.addEventListener("click", () => {
+    hideMenu();
+    showReminderPanel();
+  });
+
+  focusButton.addEventListener("click", () => {
+    hideMenu();
+    showFocusPanel();
+  });
+
+  meritButton.addEventListener("click", () => {
+    hideMenu();
+    showMeritPanel();
+  });
+
+  musicButton.addEventListener("click", () => {
+    hideMenu();
+    setMusicRhythmAutoEnabled(!isMusicRhythmAutoEnabled);
+  });
+
+  recallButton.addEventListener("click", () => {
+    if (isRecallAnimating) return;
+    hideMenu();
+    void recallCurrentPet();
+  });
+
+  quitButton.addEventListener("click", () => {
+    hideMenu();
+    isExiting = true;
+    engine.applyState("failed");
+    setTimeout(() => exit(0), 3000);
+  });
+
+  menu.addEventListener("mouseenter", () => {
     isPetMenuOpen = true;
-    engine.applyState("idle");
-    lastActivityTime = Date.now();
     lastPetInteractionTime = Date.now();
+  });
 
-    const menu = await Menu.new({
-      items: [
-        await Submenu.new({
-          text: "动作演示",
-          items: [
-            { id: "idle", text: "待机", action: () => engine.applyState("idle") },
-            { id: "waving", text: "打招呼", action: () => engine.applyState("waving") },
-            { id: "jumping", text: "跳跃", action: () => engine.applyState("jumping") },
-            { id: "running", text: "奔跑", action: () => engine.applyState("running") },
-            { id: "failed", text: "失败", action: () => engine.applyState("failed") },
-            { id: "waiting", text: "等待", action: () => engine.applyState("waiting") },
-            { id: "review", text: "思考", action: () => engine.applyState("review") },
-          ],
-        }),
-        { id: "todo", text: "自定义代办...", action: () => showTodoPanel() },
-        await Submenu.new({
-          text: "定时专注",
-          items: [
-            { id: "focus-5", text: "5 分钟", action: () => startFocusMode(5, engine) },
-            { id: "focus-15", text: "15 分钟", action: () => startFocusMode(15, engine) },
-            { id: "focus-30", text: "30 分钟", action: () => startFocusMode(30, engine) },
-            { id: "focus-45", text: "45 分钟", action: () => startFocusMode(45, engine) },
-            { id: "focus-60", text: "60 分钟", action: () => startFocusMode(60, engine) },
-            { item: "Separator" as const },
-            { id: "focus-cancel", text: "退出专注", action: () => endFocusMode(false, engine) },
-          ],
-        }),
-        { id: "volume", text: "调节音量", action: () => {
-          const panel = document.getElementById("volume-panel");
-          if (panel) {
-            isPetPanelOpen = true;
-            lastPetInteractionTime = Date.now();
-            panel.style.display = "flex";
-            panel.style.bottom = "20px";
-          }
-        }},
-        await (async () => {
-          const currentMode = localStorage.getItem(LS_CHAT_MODE) || "basic";
-          const currentPersona = localStorage.getItem(LS_PERSONA_MODE) || "tsundere";
-          const personaAction = (key: string) => () => {
-            localStorage.setItem(LS_CHAT_MODE, "awaken");
-            localStorage.setItem(LS_PERSONA_MODE, key);
-          };
-          return Submenu.new({
-            text: "对话模式",
-            items: [
-              await CheckMenuItem.new({
-                id: "mode-basic",
-                text: "基础闲聊 (Hitokoto)",
-                checked: currentMode === "basic",
-                action: () => {
-                  localStorage.setItem(LS_CHAT_MODE, "basic");
-                },
-              }),
-              await Submenu.new({
-                text: "全面觉醒 (大模型)",
-                items: [
-                  await CheckMenuItem.new({ id: "persona-sunny", text: "阳光开朗型", checked: currentMode === "awaken" && currentPersona === "sunny", action: personaAction("sunny") }),
-                  await CheckMenuItem.new({ id: "persona-gentle", text: "温柔体贴型", checked: currentMode === "awaken" && currentPersona === "gentle", action: personaAction("gentle") }),
-                  await CheckMenuItem.new({ id: "persona-ice", text: "高冷冰山型", checked: currentMode === "awaken" && currentPersona === "ice", action: personaAction("ice") }),
-                  await CheckMenuItem.new({ id: "persona-tsundere", text: "傲娇粘人型", checked: currentMode === "awaken" && currentPersona === "tsundere", action: personaAction("tsundere") }),
-                  await CheckMenuItem.new({ id: "persona-toxic", text: "犀利毒舌型", checked: currentMode === "awaken" && currentPersona === "toxic", action: personaAction("toxic") }),
-                  await CheckMenuItem.new({ id: "persona-joker", text: "腹黑沙雕型", checked: currentMode === "awaken" && currentPersona === "joker", action: personaAction("joker") }),
-                  { item: "Separator" as const },
-                  { id: "persona-custom", text: "自定义性格...", action: () => {
-                    localStorage.setItem(LS_CHAT_MODE, "awaken");
-                    localStorage.setItem(LS_PERSONA_MODE, "custom");
-                    showCustomPersonaPanel();
-                  }},
-                ],
-              }),
-              { item: "Separator" as const },
-              { id: "api-connect", text: "接入 API...", action: () => showApiSettingsPanel() },
-              { id: "github-connect", text: "关联 GitHub...", action: () => showGitHubSettingsPanel() },
-            ],
-          });
-        })(),
-        { item: "Separator" },
-        await (async () => {
-          const { enable, disable, isEnabled } = await import("@tauri-apps/plugin-autostart");
-          const autoOn = await isEnabled();
-          const autoLabel = autoOn ? "◉ 开机自启动" : "◎ 开机自启动";
-          const topLabel = isAlwaysOnTop ? "◉ 窗口置顶" : "◎ 窗口置顶";
-          return Submenu.new({
-            text: "设置",
-            items: [
-              { id: "autostart", text: autoLabel, action: async () => {
-                const on = await isEnabled();
-                if (on) {
-                  await disable();
-                  showSpeech("已关闭开机自启动", 2000);
-                } else {
-                  await enable();
-                  showSpeech("已开启开机自启动", 2000);
-                }
-              }},
-              { id: "toggle-top", text: topLabel, action: async () => {
-                isAlwaysOnTop = !isAlwaysOnTop;
-                localStorage.setItem("pet-always-on-top", String(isAlwaysOnTop));
-                await appWindow.setAlwaysOnTop(isAlwaysOnTop);
-              }},
-              { id: "size", text: "尺寸调整", action: () => showSizePanel() },
-              { id: "import", text: "导入宠物 (.zip)", action: () => openImportDialog(engine) },
-            ],
-          });
-        })(),
-        { id: "quit", text: "退出", action: () => {
-          isExiting = true;
-          engine.applyState("failed");
-          setTimeout(() => exit(0), 3000);
-        }},
-      ],
-    });
+  menu.addEventListener("mouseleave", hideMenu);
 
-    try {
-      await menu.popup();
-    } finally {
-      window.setTimeout(() => {
-        isPetMenuOpen = false;
-        lastPetInteractionTime = Date.now();
-      }, 800);
-    }
+  window.addEventListener("pointerdown", (event) => {
+    if (!menu.classList.contains("show")) return;
+    const target = event.target as Node | null;
+    if (target && (menu.contains(target) || hitbox.contains(target))) return;
+    hideMenu();
+  });
+
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") hideMenu();
   });
 }
 
@@ -1872,33 +3137,19 @@ function setupEyeTracking(): void {
   if (!spriteEl) return;
 
   window.addEventListener("mousemove", (e) => {
-    if (isExiting) return;
+    if (isExiting || hasStartedDragging) return;
     const centerX = window.innerWidth / 2;
-    spriteEl.style.transform = e.clientX < centerX ? "scaleX(-1)" : "scaleX(1)";
+    applySpriteFacing(e.clientX < centerX ? "left" : "right");
   });
 }
 
 // ── Bio-Clock Idle Mechanism ──
 
 function setupBioClock(engine: PetEngine): void {
-  let lastCursorX = -1;
-  let lastCursorY = -1;
   let lastNightHour = -1;
 
-  // Poll global cursor position via Tauri API
-  setInterval(async () => {
-    try {
-      const pos = await cursorPosition();
-      if (pos.x !== lastCursorX || pos.y !== lastCursorY) {
-        lastCursorX = pos.x;
-        lastCursorY = pos.y;
-        lastActivityTime = Date.now();
-      }
-    } catch {
-      // cursor_position may not be available, ignore
-    }
-
-    if (isExiting || isMouseDown || hasStartedDragging || isFocusMode) return;
+  setInterval(() => {
+    if (isExiting || isMouseDown || hasStartedDragging || isFocusMode || isMeritMode) return;
 
     // 23:00 late night trigger
     const now = new Date();
@@ -1919,7 +3170,7 @@ function setupBioClock(engine: PetEngine): void {
     } else if (state === "idle" && elapsed > 300_000) {
       engine.applyState("review");
       setTimeout(() => {
-        if (!isExiting && engine.currentState === "review") {
+        if (!isExiting && !isMeritMode && engine.currentState === "review") {
           engine.applyState("idle");
           lastActivityTime = Date.now();
         }
@@ -1935,7 +3186,7 @@ function setupWakeUp(engine: PetEngine): void {
   if (!hitbox) return;
 
   hitbox.addEventListener("mouseenter", () => {
-    if (isExiting || isFocusMode) return;
+    if (isExiting || isFocusMode || isMeritMode) return;
     const state = engine.currentState;
     if (state === "waiting" || state === "review") {
       engine.applyState("jumping");
@@ -2003,14 +3254,14 @@ function checkSpecialDayAndTime(): string {
   return "今天也要开心哦！";
 }
 
-function showSpeech(text: string, durationMs: number): void {
+function showSpeech(text: string, durationMs: number, withSound = true): void {
   const bubble = document.getElementById("pet-speech-bubble");
   const bubbleText = bubble?.querySelector(".bubble-text") as HTMLElement | null;
   if (!bubble || !bubbleText || !text) return;
 
   bubbleText.textContent = text;
   bubble.classList.add("show-bubble");
-  playSound("bubble");
+  if (withSound) playSound("bubble");
 
   setTimeout(() => {
     bubble.classList.remove("show-bubble");
@@ -2025,25 +3276,39 @@ function setupVolumePanel(): void {
   const text = document.getElementById("volume-text");
   if (!panel || !slider || !text) return;
 
+  const updatePanel = (value: number): void => {
+    const next = Math.min(100, Math.max(0, Math.round(value)));
+    slider.value = String(next);
+    text.textContent = String(next);
+    applyPetVolume(next);
+    const pct = `${next}%`;
+    slider.style.background =
+      `linear-gradient(to right, #00BFFF ${pct}, rgba(255,255,255,0.2) ${pct})`;
+  };
+
   // 初始化轨道进度背景
-  const initPct = slider.value + "%";
-  slider.style.background =
-    `linear-gradient(to right, #00BFFF ${initPct}, rgba(255,255,255,0.2) ${initPct})`;
+  updatePanel(getPetVolumePercent());
 
   slider.addEventListener("input", () => {
     const value = parseInt(slider.value, 10);
-    text.textContent = String(value);
-    const level = value / 100;
-    Object.values(sfx).forEach((audio) => { audio.volume = level; });
-
-    // 动态轨道进度：天蓝色填充左侧，灰色填充右侧
-    const pct = value + "%";
-    slider.style.background =
-      `linear-gradient(to right, #00BFFF ${pct}, rgba(255,255,255,0.2) ${pct})`;
+    localStorage.setItem(LS_PET_VOLUME, String(value));
+    updatePanel(value);
   });
 
   slider.addEventListener("change", () => {
     playSound("pop");
+  });
+
+  window.addEventListener("storage", (event) => {
+    if (event.key === LS_PET_VOLUME) updatePanel(getPetVolumePercent());
+    if (event.key === LS_PET_EXTERNAL_SPEECH && event.newValue) {
+      try {
+        const payload = JSON.parse(event.newValue) as { text?: string; durationMs?: number };
+        if (payload.text) showSpeech(payload.text, payload.durationMs || 6000, false);
+      } catch (error) {
+        console.warn("Invalid external speech payload:", error);
+      }
+    }
   });
 
   panel.addEventListener("mouseenter", () => {
@@ -2068,6 +3333,10 @@ async function main(): Promise<void> {
   if (localStorage.getItem(LS_CHAT_MODE) === null) {
     localStorage.setItem(LS_CHAT_MODE, "basic");
   }
+  if (localStorage.getItem(LS_MERIT_TEXT) === null) {
+    localStorage.setItem(LS_MERIT_TEXT, MERIT_DEFAULT_TEXT);
+  }
+  localStorage.setItem(LS_MERIT_ENABLED, "false");
 
   const spriteEl = document.getElementById("pet-sprite");
   if (!spriteEl) {
@@ -2075,8 +3344,8 @@ async function main(): Promise<void> {
     return;
   }
 
-  const spritesheetUrl = await loadSpritesheetUrl();
-  const engine = new PetEngine(spriteEl, CODEX_ATLAS, spritesheetUrl);
+  const { spritesheetUrl, manifest } = await loadPetAssets();
+  const engine = new PetEngine(spriteEl, atlasFromManifest(manifest), spritesheetUrl);
   (window as any).__petEngine = engine;
   await applyPetSizeScale();
 
@@ -2089,17 +3358,23 @@ async function main(): Promise<void> {
 
   setupDrag(engine);
   setupContextMenu(engine);
+  setupMusicRhythmMode();
+  setupCursorPassthrough();
   setupEyeTracking();
   setupBioClock(engine);
   setupWakeUp(engine);
   setupIdleRoaming(engine);
+  setupManagerSettingsSync();
   setupVolumePanel();
   setupSizePanel();
+  setupFocusPanel(engine);
+  setupMeritPanel(engine);
   setupApiSettingsPanel();
   setupCustomPersonaPanel();
   setupGitHubSettingsPanel();
   setupFileDrop();
   setupTodoPanel();
+  void restoreSavedSummonedPets();
 
   // GitHub 贡献度监控：启动 3 秒后初检，之后每 5 分钟轮询
   setTimeout(() => checkGitHubStatus(), 3000);
