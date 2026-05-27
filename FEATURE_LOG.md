@@ -299,3 +299,9 @@
 - 修复 GitHub Actions 打包时 `android_system_properties` 被锁定到 crates.io 不存在的 `0.1.6` 导致 macOS 与 Windows 构建失败的问题，将锁文件恢复为可解析的 `0.1.5`。
 - 发布版本提升到 `0.1.7`，用于重新触发自动打包并避开已失败的 `v0.1.6` tag。
 - 验证：运行 `cargo check`、`npm run build` 与 `git diff --check` 通过。
+
+### 2026-05-27 安装版编辑器图片链路修复
+- 修复 Windows 安装版中编辑桌宠时，帧列表缩略图使用 `data:` 图片源却被 Tauri CSP 拦截，导致缩略帧显示为断图图标的问题。
+- 替换帧与横版动作导入改为使用 `blob:` 临时 URL 解码本地图片，避免安装版继续依赖 `FileReader` 生成的超长 `data:` 图片地址。
+- 在 `img-src` 中补充 `data:` 白名单，保留现有 `blob:` 图集加载修复，覆盖缩略帧、粒子特效、本地图片解码与图集读取链路，并将发布版本提升到 `0.1.8`。
+- 验证：运行 `cargo check`、`npm run build` 与 `git diff --check`。

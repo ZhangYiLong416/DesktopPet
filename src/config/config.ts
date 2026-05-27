@@ -2423,7 +2423,7 @@ function pasteSelectedEditorFrame(): void {
 
 async function replaceSelectedEditorFrame(file: File): Promise<void> {
   try {
-    const cropped = cropAndAutoCenterImage(await loadImageElement(await He(file)));
+    const cropped = cropAndAutoCenterImage(await loadImageFile(file));
     const canvas = createEmptyFrameCanvas();
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -2519,7 +2519,7 @@ async function importActionStripImage(file: File): Promise<void> {
   els.actionStripImport.disabled = true;
   els.actionStripImport.textContent = "导入中...";
   try {
-    const rawImage = await loadImageElement(await He(file));
+    const rawImage = await loadImageFile(file);
     
     // 自动判断是否是 2*2 的拼合图
     const imgWidth = rawImage.naturalWidth;
@@ -2570,15 +2570,6 @@ async function importActionStripImage(file: File): Promise<void> {
     els.actionStripImport.disabled = false;
     els.actionStripImport.textContent = originalText;
   }
-}
-
-function He(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("读取图片失败"));
-    reader.readAsDataURL(file);
-  });
 }
 
 function selectEditorModeAction(key: ModeActionKey): void {
@@ -2693,6 +2684,15 @@ function loadImageElement(src: string): Promise<HTMLImageElement> {
     image.onerror = () => reject(new Error("图片加载失败"));
     image.src = src;
   });
+}
+
+async function loadImageFile(file: File): Promise<HTMLImageElement> {
+  const url = URL.createObjectURL(file);
+  try {
+    return await loadImageElement(url);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 function dataUrlBase64(dataUrl: string): string {
