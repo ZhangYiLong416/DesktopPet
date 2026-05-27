@@ -294,3 +294,8 @@
 - 修复 Windows 安装版中“编辑桌宠”读取本地 `spritesheet.webp` 后转为 `blob:` 图片时被 Tauri CSP 拦截的问题，允许 `img-src` 加载 `blob:` 来源。
 - 保持本地文件读取与编辑器切帧逻辑不变，仅补齐安装版运行环境需要的图片来源白名单。
 - 验证：运行 `npm run build` 与 `git diff --check` 通过。
+
+### 发布流水线 Rust 依赖锁定修复
+- 修复 GitHub Actions 打包时 `android_system_properties` 被锁定到 crates.io 不存在的 `0.1.6` 导致 macOS 与 Windows 构建失败的问题，将锁文件恢复为可解析的 `0.1.5`。
+- 发布版本提升到 `0.1.7`，用于重新触发自动打包并避开已失败的 `v0.1.6` tag。
+- 验证：运行 `cargo check`、`npm run build` 与 `git diff --check` 通过。
