@@ -55,7 +55,13 @@
     ],
     "windows": {
       "nsis": {
+        "headerImage": "installer-art/nsis-header.bmp",
+        "sidebarImage": "installer-art/nsis-sidebar.bmp",
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
+        "uninstallerHeaderImage": "installer-art/nsis-uninstall-header.bmp",
         "installMode": "both",
+        "languages": ["SimpChinese", "English"],
         "startMenuFolder": "VibePet"
       }
     }
