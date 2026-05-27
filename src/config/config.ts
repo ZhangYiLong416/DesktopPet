@@ -18,7 +18,6 @@ interface EditorAction {
 }
 
 interface WorkshopItem {
-  id: number;
   petId: string;
   actionType: string;
   title: string;
@@ -27,8 +26,6 @@ interface WorkshopItem {
   framesCount: number;
   frameDuration: number;
   imageUrl: string;
-  createdAt: string;
-  downloadsCount?: number; // 新增的后端真实下载量属性
 }
 
 type ModeActionKey = "focus" | "music" | "merit";
@@ -46,15 +43,7 @@ interface FrameAnimation {
 }
 
 const WORKSHOP_SHARE_API = "https://api.1024588.xyz/api/share";
-
-function getDeviceUuid(): string {
-  let uuid = localStorage.getItem("device_uuid");
-  if (!uuid) {
-    uuid = "dev_" + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-    localStorage.setItem("device_uuid", uuid);
-  }
-  return uuid;
-}
+const EMPTY_PETS_IMAGE = new URL("./empty-pets.png", import.meta.url).href;
 
 const LS_PET_ASSETS_VERSION = "pet_assets_version";
 
@@ -84,6 +73,18 @@ const MODE_ACTION_PRESETS: Record<ModeActionKey, ModeActionPreset> = {
   }
 };
 
+const DEFAULT_PREVIEW_ANIMATIONS: FrameAnimation[] = [
+  { row: 0, frames: 6, frameDurations: [280, 110, 110, 140, 140, 320] },
+  { row: 1, frames: 8, frameDurations: [120, 120, 120, 120, 120, 120, 120, 220] },
+  { row: 2, frames: 8, frameDurations: [120, 120, 120, 120, 120, 120, 120, 220] },
+  { row: 3, frames: 4, frameDurations: [140, 140, 140, 280] },
+  { row: 4, frames: 5, frameDurations: [140, 140, 140, 140, 280] },
+  { row: 5, frames: 8, frameDurations: [140, 140, 140, 140, 140, 140, 140, 240] },
+  { row: 6, frames: 6, frameDurations: [150, 150, 150, 150, 150, 260] },
+  { row: 7, frames: 6, frameDurations: [120, 120, 120, 120, 120, 220] },
+  { row: 8, frames: 6, frameDurations: [150, 150, 150, 150, 150, 280] },
+];
+
 
 const API_BASE = "https://codexpet.xyz";
 const PAGE_SIZE = 30;
@@ -94,6 +95,7 @@ const LS_API_MODEL = "pet_api_model";
 const LS_CHAT_MODE = "pet_chat_mode";
 const LS_PERSONA_MODE = "pet_persona_mode";
 const LS_CUSTOM_PERSONA = "pet_custom_persona_text";
+const LS_MUSIC_RHYTHM_SYNC_MODE = "pet_music_rhythm_sync_mode";
 const LS_ALLOW_MULTIPLE_PETS = "pet_allow_multiple_instances";
 const LS_PRIMARY_PET_ID = "pet_primary_project_id";
 const LS_SUMMONED_PET_IDS = "pet_summoned_pet_ids";
@@ -186,6 +188,7 @@ const els = {
   alwaysTopToggle: document.getElementById("always-top-toggle") as HTMLInputElement,
   petInstanceModeRadios: [...document.querySelectorAll<HTMLInputElement>('input[name="pet-instance-mode"]')],
   petActivityLevelRadios: [...document.querySelectorAll<HTMLInputElement>('input[name="pet-activity-level"]')],
+  musicRhythmSyncRadios: [...document.querySelectorAll<HTMLInputElement>('input[name="music-rhythm-sync"]')],
   sizePresets: [...document.querySelectorAll<HTMLButtonElement>(".size-presets button")],
   sizeSlider: document.getElementById("manager-size-slider") as HTMLInputElement,
   sizeInput: document.getElementById("manager-size-input") as HTMLInputElement,
@@ -194,7 +197,9 @@ const els = {
   volumeInput: document.getElementById("manager-volume-input") as HTMLInputElement,
   volumeText: document.getElementById("manager-volume-text") as HTMLSpanElement,
   chatMode: document.getElementById("chat-mode-select") as HTMLSelectElement,
+  personaField: document.getElementById("persona-setting-field") as HTMLLabelElement,
   persona: document.getElementById("persona-select") as HTMLSelectElement,
+  customPersonaField: document.getElementById("custom-persona-field") as HTMLLabelElement,
   customPersona: document.getElementById("custom-persona-input") as HTMLTextAreaElement,
   apiConfigFields: document.getElementById("api-config-fields") as HTMLDivElement,
   apiEndpoint: document.getElementById("api-endpoint-input") as HTMLInputElement,
@@ -342,6 +347,15 @@ function normalizeApiEndpoint(value: string): string {
 function updateApiConfigVisibility(): void {
   const isAwaken = els.chatMode.value === "awaken";
   els.apiConfigFields.hidden = !isAwaken;
+}
+
+function updatePersonaVisibility(): void {
+  const isAwaken = els.chatMode.value === "awaken";
+  const isCustomPersona = els.persona.value === "custom";
+  els.personaField.hidden = !isAwaken;
+  els.persona.disabled = !isAwaken;
+  els.customPersonaField.hidden = !isAwaken || !isCustomPersona;
+  els.customPersona.disabled = !isAwaken || !isCustomPersona;
 }
 
 function modelsEndpointFromChatEndpoint(value: string): string {
@@ -580,12 +594,51 @@ function filteredProjectPets(): ProjectPet[] {
   return pets;
 }
 
+function mineTagPetCount(tagName: string): number {
+  if (tagName === "all") return state.projectPets.length;
+  if (tagName === "favorite") {
+    const favoriteIds = new Set(getFavoritePetIds());
+    return state.projectPets.filter((pet) => favoriteIds.has(pet.id)).length;
+  }
+  const ids = new Set(getCustomTags()[tagName] || []);
+  return state.projectPets.filter((pet) => ids.has(pet.id)).length;
+}
+
+function appendActiveTagCount(tab: HTMLButtonElement, tagName: string): void {
+  if (state.currentMineTag !== tagName || tagName === "all") return;
+  const total = mineTagPetCount(tagName);
+  const count = document.createElement("span");
+  count.className = "tag-tab-count";
+  count.textContent = String(total);
+  count.setAttribute("aria-label", `${total} 只桌宠`);
+  tab.append(count);
+}
+
+function renderMineEmptyState(message: string): void {
+  const empty = document.createElement("div");
+  empty.className = "mine-empty-state";
+
+  const image = document.createElement("img");
+  image.className = "mine-empty-image";
+  image.src = EMPTY_PETS_IMAGE;
+  image.alt = "";
+  image.loading = "lazy";
+
+  const text = document.createElement("p");
+  text.className = "mine-empty-text";
+  text.textContent = message;
+
+  empty.append(image, text);
+  els.myPetsList.append(empty);
+}
+
 function renderListRow(options: {
   title: string;
   subtitle: string;
   spriteUrl: string;
   actions: HTMLElement[];
   titleExtra?: HTMLElement; // 新增的可选参数
+  metaExtra?: HTMLElement;
   customPreview?: HTMLElement; // 新增的自定义预览框（例如高清创意工坊动图）
 }): HTMLElement {
   const row = document.createElement("article");
@@ -626,6 +679,9 @@ function renderListRow(options: {
   subtitle.textContent = options.subtitle;
   
   info.append(titleWrapper, subtitle);
+  if (options.metaExtra) {
+    info.append(options.metaExtra);
+  }
 
   const actions = document.createElement("div");
   actions.className = "row-actions";
@@ -633,6 +689,31 @@ function renderListRow(options: {
 
   row.append(preview, info, actions);
   return row;
+}
+
+function createPersonalActionBadges(pet: ProjectPet): HTMLElement {
+  const badges = document.createElement("div");
+  badges.className = "pet-personal-actions";
+  badges.setAttribute("aria-label", "个性化动作状态");
+
+  const actionBadges: Array<{ key: ModeActionKey; label: string }> = [
+    { key: "merit", label: "功德模式" },
+    { key: "focus", label: "专注模式" },
+    { key: "music", label: "律动模式" },
+  ];
+  const animations = pet.animations || {};
+
+  actionBadges.forEach(({ key, label }) => {
+    const active = Boolean(animations[key]);
+    const badge = document.createElement("span");
+    badge.className = `pet-action-status pet-action-status-${key}${active ? " active" : ""}`;
+    badge.textContent = label;
+    badge.title = active ? `${label}：已配置个性化动作` : `${label}：暂无个性化动作`;
+    badge.setAttribute("aria-label", badge.title);
+    badges.append(badge);
+  });
+
+  return badges;
 }
 
 function preserveScroll(fn: () => void): void {
@@ -694,12 +775,22 @@ function renderMyPets(): void {
   state.minePage = Math.min(state.minePage, pages);
   els.myPetsList.replaceChildren();
 
+  const selectedTagCount = mineTagPetCount(state.currentMineTag);
+  const selectedFilterName = state.currentMineTag === "favorite" ? "已收藏" : state.currentMineTag;
+  const hasSelectedFilter = state.currentMineTag !== "all";
   if (pets.length === 0) {
-    setStatus(els.mineStatus, "没有找到本地桌宠。");
+    setStatus(
+      els.mineStatus,
+      hasSelectedFilter ? `「${selectedFilterName}」共 ${selectedTagCount} 只桌宠，当前没有匹配结果。` : "没有找到本地桌宠。"
+    );
+    renderMineEmptyState("小桌宠翻遍了标签，还没找到匹配的伙伴。");
     els.minePagination.replaceChildren();
     return;
   }
-  setStatus(els.mineStatus, `本地已有 ${state.projectPets.length} 个桌宠。`);
+  setStatus(
+    els.mineStatus,
+    hasSelectedFilter ? `「${selectedFilterName}」共 ${selectedTagCount} 只桌宠。` : `本地已有 ${state.projectPets.length} 个桌宠。`
+  );
 
   const favoriteIds = new Set(getFavoritePetIds());
   const fragment = document.createDocumentFragment();
@@ -829,6 +920,7 @@ function renderMyPets(): void {
       spriteUrl: projectPetSpriteUrl(pet),
       actions: [summon, edit, remove],
       titleExtra,
+      metaExtra: createPersonalActionBadges(pet),
     });
 
     fragment.append(rowEl);
@@ -1081,7 +1173,14 @@ function renderMineTagsBar(): void {
   const favTab = document.createElement("button");
   favTab.className = `tag-tab${state.currentMineTag === "favorite" ? " active" : ""}`;
   favTab.type = "button";
-  favTab.textContent = "已收藏 🌟";
+  const favIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  favIcon.setAttribute("viewBox", "0 0 24 24");
+  favIcon.setAttribute("aria-hidden", "true");
+  favIcon.innerHTML = '<path d="M12 3.8 14.5 9l5.7.8-4.1 4 1 5.7-5.1-2.7-5.1 2.7 1-5.7-4.1-4L9.5 9 12 3.8Z"></path>';
+  const favLabel = document.createElement("span");
+  favLabel.textContent = "已收藏";
+  favTab.append(favIcon, favLabel);
+  appendActiveTagCount(favTab, "favorite");
   favTab.addEventListener("click", () => {
     state.currentMineTag = "favorite";
     state.minePage = 1;
@@ -1097,6 +1196,7 @@ function renderMineTagsBar(): void {
     tab.className = `tag-tab${state.currentMineTag === tagName ? " active" : ""}`;
     tab.type = "button";
     tab.textContent = tagName;
+    appendActiveTagCount(tab, tagName);
     tab.addEventListener("click", () => {
       state.currentMineTag = tagName;
       state.minePage = 1;
@@ -1117,10 +1217,102 @@ function renderMineTagsBar(): void {
   const showSummonAll = state.currentMineTag !== "all" && currentFilteredPets.length > 0;
   if (showSummonAll) {
     els.summonGroupBtn.classList.remove("hidden");
-    els.summonGroupBtn.textContent = `⚡ 一键召唤本组 (${currentFilteredPets.length})`;
+    updateSummonGroupButton("一键召唤当前分组", String(currentFilteredPets.length));
   } else {
     els.summonGroupBtn.classList.add("hidden");
   }
+}
+
+function updateSummonGroupButton(label: string, badge: string, stateName = "ready"): void {
+  const badgeElement = els.summonGroupBtn.querySelector<HTMLElement>(".tag-action-count");
+  els.summonGroupBtn.setAttribute("aria-label", label);
+  els.summonGroupBtn.title = label;
+  els.summonGroupBtn.dataset.state = stateName;
+  if (badgeElement) badgeElement.textContent = badge;
+}
+
+function openDeleteTagDialog(tagName: string): void {
+  const overlay = document.createElement("div");
+  overlay.className = "confirm-overlay";
+
+  const dialog = document.createElement("section");
+  dialog.className = "confirm-dialog delete-tag-dialog";
+  dialog.setAttribute("role", "alertdialog");
+  dialog.setAttribute("aria-modal", "true");
+  dialog.setAttribute("aria-labelledby", "delete-tag-dialog-title");
+  dialog.setAttribute("aria-describedby", "delete-tag-dialog-description");
+
+  const icon = document.createElement("span");
+  icon.className = "confirm-dialog-icon";
+  icon.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v5"></path><path d="M12 17h.01"></path><path d="M12 3 2.8 20h18.4L12 3Z"></path></svg>';
+
+  const copy = document.createElement("div");
+  copy.className = "confirm-dialog-copy";
+
+  const title = document.createElement("h3");
+  title.id = "delete-tag-dialog-title";
+  title.textContent = `删除分组「${tagName}」？`;
+
+  const description = document.createElement("p");
+  description.id = "delete-tag-dialog-description";
+  description.textContent = "仅删除此分组标签，分组中的桌宠和资源文件都会保留。";
+  copy.append(title, description);
+
+  const actions = document.createElement("div");
+  actions.className = "confirm-dialog-actions";
+
+  const cancelButton = document.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.className = "secondary-button confirm-cancel-button";
+  cancelButton.textContent = "取消";
+
+  const confirmButton = document.createElement("button");
+  confirmButton.type = "button";
+  confirmButton.className = "danger-button confirm-danger-button";
+  confirmButton.textContent = "确认删除";
+  actions.append(cancelButton, confirmButton);
+
+  const closeDialog = (restoreDeleteButton = true): void => {
+    document.removeEventListener("keydown", handleKeydown);
+    overlay.remove();
+    if (restoreDeleteButton) {
+      els.deleteTagBtn.focus();
+    } else {
+      els.mineTagsList.querySelector<HTMLButtonElement>(".tag-tab.active")?.focus();
+    }
+  };
+  const handleKeydown = (event: KeyboardEvent): void => {
+    if (event.key === "Escape") {
+      closeDialog();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    if (event.shiftKey && document.activeElement === cancelButton) {
+      event.preventDefault();
+      confirmButton.focus();
+    } else if (!event.shiftKey && document.activeElement === confirmButton) {
+      event.preventDefault();
+      cancelButton.focus();
+    }
+  };
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) closeDialog();
+  });
+  cancelButton.addEventListener("click", () => closeDialog());
+  confirmButton.addEventListener("click", () => {
+    deleteTag(tagName);
+    state.currentMineTag = "all";
+    state.minePage = 1;
+    renderMineTagsBar();
+    renderMyPets();
+    closeDialog(false);
+  });
+
+  dialog.append(icon, copy, actions);
+  overlay.append(dialog);
+  document.body.append(overlay);
+  document.addEventListener("keydown", handleKeydown);
+  cancelButton.focus();
 }
 
 function cleanupFavoritePetIds(): void {
@@ -1454,13 +1646,30 @@ function getPetSizeScale(): number {
   return Number.isFinite(saved) ? Math.min(1.4, Math.max(0.35, saved)) : 0.6;
 }
 
+const BASE_PET_WIDTH = 192;
+const BASE_PET_HEIGHT = 208;
+const SPEECH_SPACE_HEIGHT = 48;
+const SIZE_PRESET_NAMES: Record<number, string> = {
+  35: "迷你",
+  60: "小巧",
+  85: "标准",
+  110: "醒目",
+  140: "超大"
+};
+
 function updateSizeControls(percent: number): void {
-  const next = Math.min(140, Math.max(35, Math.round(percent)));
+  const current = Number(els.sizeSlider.value) || 60;
+  const next = Math.min(140, Math.max(35, Math.round(Number.isFinite(percent) ? percent : current)));
   const scale = next / 100;
+  const width = Math.round(BASE_PET_WIDTH * scale);
+  const height = Math.round(BASE_PET_HEIGHT * scale + SPEECH_SPACE_HEIGHT);
   localStorage.setItem(LS_PET_SIZE_SCALE, String(scale));
   els.sizeSlider.value = String(next);
-  els.sizeInput.value = String(next);
-  els.sizeText.textContent = `${next}% · ${Math.round(192 * scale)} x ${Math.round(208 * scale + 48)}px`;
+  els.sizeInput.value = String(width);
+  els.sizeText.textContent = `${SIZE_PRESET_NAMES[next] ? `${SIZE_PRESET_NAMES[next]} · ` : ""}${width} x ${height} px`;
+  for (const button of els.sizePresets) {
+    button.classList.toggle("active", Number(button.dataset.sizePercent) === next);
+  }
 }
 
 function getPetVolumePercent(): number {
@@ -1487,6 +1696,10 @@ async function loadSettings(): Promise<void> {
   for (const radio of els.petActivityLevelRadios) {
     radio.checked = radio.value === activityLevel;
   }
+  const musicRhythmSync = localStorage.getItem(LS_MUSIC_RHYTHM_SYNC_MODE) || "independent";
+  for (const radio of els.musicRhythmSyncRadios) {
+    radio.checked = radio.value === musicRhythmSync;
+  }
   updateSizeControls(Math.round(getPetSizeScale() * 100));
   updateVolumeControls(getPetVolumePercent());
   els.chatMode.value = localStorage.getItem(LS_CHAT_MODE) || "basic";
@@ -1496,6 +1709,7 @@ async function loadSettings(): Promise<void> {
   els.apiModel.value = localStorage.getItem(LS_API_MODEL) || "gpt-3.5-turbo";
   els.apiKey.value = await getApiKey().catch(() => "");
   updateApiConfigVisibility();
+  updatePersonaVisibility();
   void loadPetsPath();
 }
 
@@ -1548,22 +1762,16 @@ els.addTagBtn.addEventListener("click", () => {
 
 els.deleteTagBtn.addEventListener("click", () => {
   if (state.currentMineTag === "all" || state.currentMineTag === "favorite") return;
-  if (window.confirm(`确定要删除分组「${state.currentMineTag}」吗？\n（这仅会删除标签，不会删除属于该标签的桌宠）`)) {
-    deleteTag(state.currentMineTag);
-    state.currentMineTag = "all";
-    state.minePage = 1;
-    renderMineTagsBar();
-    renderMyPets();
-  }
+  openDeleteTagDialog(state.currentMineTag);
 });
 
 els.summonGroupBtn.addEventListener("click", async () => {
   const currentFilteredPets = filteredProjectPets();
   if (currentFilteredPets.length === 0) return;
 
-  const originalText = els.summonGroupBtn.textContent || "⚡ 一键召唤本组";
+  const originalCount = String(currentFilteredPets.length);
   els.summonGroupBtn.disabled = true;
-  els.summonGroupBtn.textContent = "正在群发召唤...";
+  updateSummonGroupButton("正在召唤当前分组", "…", "working");
 
   try {
     if (!isTauriRuntime()) {
@@ -1587,9 +1795,9 @@ els.summonGroupBtn.addEventListener("click", async () => {
         await invoke("show_primary_pet_window");
         setStatus(els.mineStatus, `派对模式未开启，已为您单宠召唤「${firstPet.displayName}」。`);
         window.setTimeout(() => void loadActivePets(), 300);
-        els.summonGroupBtn.textContent = "召唤完成";
+        updateSummonGroupButton("召唤完成", "✓", "success");
         window.setTimeout(() => {
-          els.summonGroupBtn.textContent = originalText;
+          updateSummonGroupButton("一键召唤当前分组", originalCount);
           els.summonGroupBtn.disabled = false;
         }, 1200);
         return;
@@ -1606,17 +1814,17 @@ els.summonGroupBtn.addEventListener("click", async () => {
       await new Promise((resolve) => window.setTimeout(resolve, 100));
     }
 
-    setStatus(els.mineStatus, `⚡ 成功一键召唤了「${state.currentMineTag}」分组下的全部 ${currentFilteredPets.length} 只桌宠！`);
+    setStatus(els.mineStatus, `成功召唤了「${state.currentMineTag}」分组下的全部 ${currentFilteredPets.length} 只桌宠。`);
     window.setTimeout(() => void loadActivePets(), 300);
-    els.summonGroupBtn.textContent = "⚡ 群发召唤成功！";
+    updateSummonGroupButton("召唤完成", "✓", "success");
     
   } catch (err) {
     console.error(err);
     setStatus(els.mineStatus, `一键群召失败：${err instanceof Error ? err.message : String(err)}`, true);
-    els.summonGroupBtn.textContent = "召唤失败";
+    updateSummonGroupButton("召唤失败", "!", "error");
   } finally {
     window.setTimeout(() => {
-      els.summonGroupBtn.textContent = originalText;
+      updateSummonGroupButton("一键召唤当前分组", originalCount);
       els.summonGroupBtn.disabled = false;
     }, 1500);
   }
@@ -1659,6 +1867,12 @@ els.petActivityLevelRadios.forEach((radio) => {
     localStorage.setItem("pet_activity_level", radio.value);
   });
 });
+els.musicRhythmSyncRadios.forEach((radio) => {
+  radio.addEventListener("change", () => {
+    if (!radio.checked) return;
+    localStorage.setItem(LS_MUSIC_RHYTHM_SYNC_MODE, radio.value);
+  });
+});
 els.sizePresets.forEach((button) => {
   button.addEventListener("click", () => {
     const percent = Number(button.dataset.sizePercent);
@@ -1668,7 +1882,14 @@ els.sizePresets.forEach((button) => {
   });
 });
 els.sizeSlider.addEventListener("input", () => updateSizeControls(Number(els.sizeSlider.value)));
-els.sizeInput.addEventListener("input", () => updateSizeControls(Number(els.sizeInput.value)));
+const applySizeInput = (): void => updateSizeControls((Number(els.sizeInput.value) / BASE_PET_WIDTH) * 100);
+els.sizeInput.addEventListener("blur", applySizeInput);
+els.sizeInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    applySizeInput();
+    els.sizeInput.blur();
+  }
+});
 els.volumeSlider.addEventListener("input", () => updateVolumeControls(Number(els.volumeSlider.value)));
 els.volumeInput.addEventListener("input", () => updateVolumeControls(Number(els.volumeInput.value)));
 window.addEventListener("storage", (event) => {
@@ -1678,8 +1899,12 @@ window.addEventListener("storage", (event) => {
 els.chatMode.addEventListener("change", () => {
   localStorage.setItem(LS_CHAT_MODE, els.chatMode.value);
   updateApiConfigVisibility();
+  updatePersonaVisibility();
 });
-els.persona.addEventListener("change", () => localStorage.setItem(LS_PERSONA_MODE, els.persona.value));
+els.persona.addEventListener("change", () => {
+  localStorage.setItem(LS_PERSONA_MODE, els.persona.value);
+  updatePersonaVisibility();
+});
 els.customPersona.addEventListener("input", () => localStorage.setItem(LS_CUSTOM_PERSONA, els.customPersona.value.trim()));
 els.apiEndpoint.addEventListener("change", () => {
   const endpoint = normalizeApiEndpoint(els.apiEndpoint.value);
@@ -3129,20 +3354,10 @@ function renderWorkshop(): void {
     applyBtn.textContent = "一键套用";
     applyBtn.addEventListener("click", () => void choosePetToApply(item));
 
-    // 根据唯一的创建时间产生一个稳定又逼真的下载/套用数
-    const rawTime = item.createdAt || "";
-    const timeMs = rawTime ? new Date(rawTime).getTime() : Date.now();
-    const safeTimeMs = isNaN(timeMs) ? Date.now() : timeMs;
-    const hoursPassed = Math.floor((Date.now() - safeTimeMs) / (3600 * 1000));
-    const downloadCount = Math.min(245, Math.max(12, (hoursPassed * 2) % 200 + 15));
-
-    // 优先读取本地动态后端提供的百分之百真实 downloadsCount，无缝以逼真随机下载量进行兜底
-    const realDownloads = item.downloadsCount !== undefined ? item.downloadsCount : downloadCount;
-
     // 调用 renderListRow 生成卡片行
     const rowEl = renderListRow({
       title: item.title,
-      subtitle: `作者：${item.author || "匿名大佬"} · 共 ${item.framesCount} 帧 · 帧率 ${item.frameDuration}ms · 下载 ${realDownloads} 次`,
+      subtitle: `作者：${item.author || "匿名大佬"} · 共 ${item.framesCount} 帧 · 帧率 ${item.frameDuration}ms`,
       spriteUrl: item.imageUrl,
       actions: [applyBtn],
       titleExtra,
@@ -3200,51 +3415,55 @@ async function choosePetToApply(item: WorkshopItem): Promise<void> {
     return;
   }
 
-  // 1. 全局毛玻璃磨砂温馨遮罩层 (与浅色暖米黄色调完美大一统)
   const overlay = document.createElement("div");
-  overlay.style.position = "fixed";
-  overlay.style.top = "0";
-  overlay.style.left = "0";
-  overlay.style.width = "100%";
-  overlay.style.height = "100%";
-  overlay.style.backgroundColor = "rgba(50, 40, 30, 0.4)";
-  overlay.style.backdropFilter = "blur(10px)";
-  overlay.style.zIndex = "9999";
-  overlay.style.display = "flex";
-  overlay.style.justifyContent = "center";
-  overlay.style.alignItems = "center";
+  overlay.className = "workshop-apply-overlay";
 
-  // 2. 温润手绘感米黄色磨砂毛玻璃卡片
   const modal = document.createElement("div");
-  modal.className = "editor-card";
-  modal.style.width = "460px";
-  modal.style.maxHeight = "85%";
-  modal.style.display = "flex";
-  modal.style.flexDirection = "column";
-  modal.style.padding = "24px";
-  modal.style.borderRadius = "16px";
-  modal.style.background = "rgba(255, 252, 245, 0.98)";
-  modal.style.border = "2px solid #e6dcc8";
-  modal.style.boxShadow = "0 20px 50px rgba(76, 60, 30, 0.15)";
-  modal.style.color = "#352c22";
+  modal.className = "workshop-apply-dialog";
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  modal.setAttribute("aria-labelledby", "workshop-apply-title");
 
-  // 标题：暗手绘褐色，加粗加重
+  let previewTimers: number[] = [];
+  const stopPreviewAnimations = (): void => {
+    previewTimers.forEach((timer) => window.clearTimeout(timer));
+    previewTimers = [];
+  };
+  const closeModal = (): void => {
+    stopPreviewAnimations();
+    document.removeEventListener("keydown", handleDialogKeydown);
+    overlay.remove();
+  };
+  const handleDialogKeydown = (event: KeyboardEvent): void => {
+    if (event.key === "Escape") closeModal();
+  };
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) closeModal();
+  });
+
+  const header = document.createElement("header");
+  header.className = "workshop-apply-header";
+
+  const eyebrow = document.createElement("p");
+  eyebrow.className = "workshop-apply-eyebrow";
+  eyebrow.textContent = "套用社区动作";
+
   const title = document.createElement("h3");
-  title.style.margin = "0 0 16px 0";
-  title.style.fontSize = "18px";
-  title.style.fontWeight = "800";
-  title.style.color = "#352c22";
-  title.style.lineHeight = "1.4";
-  title.textContent = `套用动作：「${item.title}」到哪只宠物？`;
+  title.id = "workshop-apply-title";
+  title.textContent = item.title;
+
+  const description = document.createElement("p");
+  description.className = "workshop-apply-description";
+  description.textContent = "选择套用目标。若原配桌宠尚未下载，可先下载后直接应用。";
+
+  header.append(eyebrow, title, description);
 
   let localPets = state.projectPets.filter((p) => !p.builtin);
   let exactLocalMatch = localPets.find((p) => p.id === item.petId);
 
-  // 智能推荐同名套用对象本地是否未下载
   let showVirtualItem = !exactLocalMatch;
   let marketPet: MarketPet | null = null;
 
-  // 启动后台异步拉取元数据，保证弹窗秒开无延迟！
   if (showVirtualItem) {
     marketPet = state.marketPets.find(p => p.slug.toLowerCase() === item.petId.toLowerCase()) || null;
     if (!marketPet) {
@@ -3267,7 +3486,6 @@ async function choosePetToApply(item: WorkshopItem): Promise<void> {
           console.warn("创意工坊获取市场列表用于推荐下载时受阻：", e);
         });
     }
-    // 立即构造一个兜底 marketPet，确保断网或加载返回前第一项可立刻渲染出来
     if (!marketPet) {
       marketPet = {
         slug: item.petId,
@@ -3286,50 +3504,74 @@ async function choosePetToApply(item: WorkshopItem): Promise<void> {
 
   let recommendedPet = exactLocalMatch || (petsWithScores[0]?.score > 0 ? petsWithScores[0].pet : null);
   let hasMatchingPet = !!recommendedPet;
-
-  // 当前选中的宠物变量（默认选中被推荐的桌宠，极速顺畅一键套用！）
   let selectedPet: ProjectPet | null = recommendedPet;
 
-  // 4. 温润浅白色的模糊查找输入框，附聚焦动态绿色高亮
+  const searchField = document.createElement("label");
+  searchField.className = "workshop-apply-search";
+  const searchLabel = document.createElement("span");
+  searchLabel.textContent = "搜索本地桌宠";
   const searchInput = document.createElement("input");
-  searchInput.type = "text";
-  searchInput.placeholder = "🔍 输入宠物名进行模糊查找...";
-  searchInput.style.width = "100%";
-  searchInput.style.padding = "8px 12px";
-  searchInput.style.marginBottom = "12px";
-  searchInput.style.backgroundColor = "rgba(255, 255, 255, 0.85)";
-  searchInput.style.border = "1.5px solid #dfd1b5";
-  searchInput.style.borderRadius = "8px";
-  searchInput.style.color = "#352c22";
-  searchInput.style.outline = "none";
-  searchInput.style.boxSizing = "border-box";
-  searchInput.style.transition = "border-color 0.25s, box-shadow 0.25s";
-  
-  searchInput.addEventListener("focus", () => {
-    searchInput.style.borderColor = "#78b957";
-    searchInput.style.boxShadow = "0 0 8px rgba(120, 185, 87, 0.2)";
-  });
-  searchInput.addEventListener("blur", () => {
-    searchInput.style.borderColor = "#dfd1b5";
-    searchInput.style.boxShadow = "none";
-  });
-  
-  modal.append(searchInput);
+  searchInput.type = "search";
+  searchInput.placeholder = "输入名称查找可套用的桌宠";
+  searchField.append(searchLabel, searchInput);
 
-  // 5. 宠物列表容器（附加精致滚动条）
   const list = document.createElement("div");
   list.className = "workshop-apply-list";
-  list.style.display = "flex";
-  list.style.flexDirection = "column";
-  list.style.gap = "8px";
-  list.style.margin = "8px 0";
-  list.style.overflowY = "auto";
-  list.style.flex = "1";
+  list.setAttribute("aria-label", "可套用的桌宠列表");
+
+  const previewAnimations = new Map<string, FrameAnimation>();
+  const randomAnimationForPet = (pet: ProjectPet): FrameAnimation => {
+    const selectedAnimation = previewAnimations.get(pet.id);
+    if (selectedAnimation) return selectedAnimation;
+    const customAnimations = Object.values(pet.animations || {}) as FrameAnimation[];
+    const animations = [...DEFAULT_PREVIEW_ANIMATIONS, ...customAnimations].filter((animation) => animation.frames > 0);
+    const animation = animations[Math.floor(Math.random() * animations.length)] || DEFAULT_PREVIEW_ANIMATIONS[0];
+    previewAnimations.set(pet.id, animation);
+    return animation;
+  };
+
+  const createAvatar = (
+    src: string,
+    name: string,
+    animation: FrameAnimation,
+    columns: number = ATLAS_COLS,
+  ): HTMLElement => {
+    const avatar = document.createElement("div");
+    avatar.className = "workshop-apply-avatar";
+    const sprite = document.createElement("div");
+    sprite.className = "workshop-apply-sprite";
+    sprite.style.backgroundImage = `url("${src}")`;
+    sprite.style.backgroundSize = `${Math.max(1, columns) * 48}px auto`;
+    sprite.setAttribute("role", "img");
+    sprite.setAttribute("aria-label", `${name} 动作预览`);
+
+    let frame = 0;
+    const drawFrame = (): void => {
+      sprite.style.backgroundPosition = `${-frame * 48}px ${-animation.row * 52}px`;
+    };
+    const advance = (): void => {
+      frame = (frame + 1) % animation.frames;
+      drawFrame();
+      const delay = animation.frameDurations[frame] || animation.frameDurations[animation.frameDurations.length - 1] || 140;
+      previewTimers.push(window.setTimeout(advance, delay));
+    };
+    drawFrame();
+    previewTimers.push(window.setTimeout(advance, animation.frameDurations[0] || 140));
+    avatar.append(sprite);
+    return avatar;
+  };
+
+  const createMatchBadge = (text: string, variant: string): HTMLElement => {
+    const badge = document.createElement("span");
+    badge.className = `workshop-match-badge ${variant}`;
+    badge.textContent = text;
+    return badge;
+  };
 
   const renderList = (filterQuery = "") => {
+    stopPreviewAnimations();
     list.replaceChildren();
 
-    // 智能挂载第一个“虚拟待下载行”
     const virtualMatched = showVirtualItem && marketPet && (
       !filterQuery ||
       marketPet.slug.toLowerCase().includes(filterQuery) ||
@@ -3338,63 +3580,27 @@ async function choosePetToApply(item: WorkshopItem): Promise<void> {
 
     if (virtualMatched && marketPet) {
       const petRow = document.createElement("div");
-      petRow.style.display = "flex";
-      petRow.style.alignItems = "center";
-      petRow.style.padding = "10px 14px";
-      petRow.style.borderRadius = "8px";
-      petRow.style.gap = "12px";
-      petRow.style.cursor = "default";
-      petRow.style.transition = "all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1)";
-      petRow.style.background = "rgba(255, 255, 255, 0.5)";
-      petRow.style.border = "1.5px dashed #dfd1b5";
-      petRow.style.boxShadow = "none";
-
-      const avatarBox = document.createElement("div");
-      avatarBox.style.width = "40px";
-      avatarBox.style.height = "42px";
-      avatarBox.style.flexShrink = "0";
-      avatarBox.style.borderRadius = "6px";
-      avatarBox.style.overflow = "hidden";
-      avatarBox.style.border = "1px solid #dfd1b5";
-      avatarBox.style.background = "rgba(255, 255, 255, 0.9)";
-      
-      const avatarSrc = marketSpriteUrl(marketPet);
-      const avatarSprite = createSprite(avatarSrc, marketPet.display_name || marketPet.slug);
-      avatarSprite.style.width = "40px";
-      avatarSprite.style.height = "42px";
-      avatarBox.append(avatarSprite);
+      petRow.className = "workshop-apply-pet download-required";
 
       const infoBox = document.createElement("div");
-      infoBox.style.flex = "1";
-      infoBox.style.display = "flex";
-      infoBox.style.flexDirection = "column";
-      infoBox.style.gap = "2px";
+      infoBox.className = "workshop-apply-pet-info";
 
       const nameEl = document.createElement("div");
-      nameEl.style.fontSize = "14px";
-      nameEl.style.fontWeight = "bold";
-      nameEl.style.color = "#352c22";
-      nameEl.innerHTML = `${marketPet.display_name || marketPet.slug} <span style="font-size: 10px; background: rgba(223, 209, 181, 0.5); color: #8a7a5f; padding: 1.5px 6px; border-radius: 4px; margin-left: 6px; font-weight: normal; vertical-align: middle;">💡 推荐同名 (待下载)</span>`;
+      nameEl.className = "workshop-apply-pet-name";
+      const petName = document.createElement("strong");
+      petName.textContent = marketPet.display_name || marketPet.slug;
+      nameEl.append(petName, createMatchBadge("原配 · 待下载", "pending"));
 
       const idEl = document.createElement("div");
-      idEl.style.fontSize = "11px";
-      idEl.style.color = "rgba(76, 60, 30, 0.5)";
-      idEl.textContent = marketPet.slug;
+      idEl.className = "workshop-apply-pet-meta";
+      idEl.textContent = "下载原配桌宠后即可应用该动作";
 
       infoBox.append(nameEl, idEl);
-      petRow.append(avatarBox, infoBox);
 
-      // 右侧下载按钮
       const downloadBtn = document.createElement("button");
-      downloadBtn.className = "primary-button";
-      downloadBtn.style.padding = "4px 12px";
-      downloadBtn.style.fontSize = "12px";
-      downloadBtn.style.borderRadius = "6px";
-      downloadBtn.style.cursor = "pointer";
-      downloadBtn.style.marginLeft = "auto";
-      downloadBtn.style.height = "28px";
-      downloadBtn.style.lineHeight = "20px";
-      downloadBtn.textContent = "下载";
+      downloadBtn.className = "primary-button workshop-download-button";
+      downloadBtn.type = "button";
+      downloadBtn.textContent = "下载原配桌宠";
 
       let isDownloading = false;
       downloadBtn.addEventListener("click", async (e) => {
@@ -3403,7 +3609,6 @@ async function choosePetToApply(item: WorkshopItem): Promise<void> {
         isDownloading = true;
         downloadBtn.disabled = true;
         downloadBtn.textContent = "下载中...";
-        downloadBtn.style.opacity = "0.7";
         try {
           if (!marketPet) throw new Error("无法获取市场桌宠下载配置。");
           await invoke<ProjectPet>("download_pet_to_project", {
@@ -3434,13 +3639,17 @@ async function choosePetToApply(item: WorkshopItem): Promise<void> {
           console.error(err);
           window.alert(`下载失败：${err}`);
           downloadBtn.disabled = false;
-          downloadBtn.textContent = "下载";
-          downloadBtn.style.opacity = "1";
+          downloadBtn.textContent = "下载原配桌宠";
           isDownloading = false;
         }
       });
 
-      petRow.append(downloadBtn);
+      const actionPreview: FrameAnimation = {
+        row: 0,
+        frames: item.framesCount,
+        frameDurations: Array.from({ length: item.framesCount }, () => item.frameDuration),
+      };
+      petRow.append(createAvatar(item.imageUrl, marketPet.display_name || marketPet.slug, actionPreview, item.framesCount), infoBox, downloadBtn);
       list.append(petRow);
     }
 
@@ -3454,10 +3663,7 @@ async function choosePetToApply(item: WorkshopItem): Promise<void> {
 
     if (filteredPets.length === 0 && !virtualMatched) {
       const hint = document.createElement("p");
-      hint.style.color = "rgba(120, 100, 80, 0.5)";
-      hint.style.textAlign = "center";
-      hint.style.margin = "20px 0";
-      hint.style.fontSize = "13px";
+      hint.className = "workshop-apply-empty";
       hint.textContent = "未找到匹配的本地宠物。";
       list.append(hint);
       return;
@@ -3468,92 +3674,38 @@ async function choosePetToApply(item: WorkshopItem): Promise<void> {
       const isRecommended = recommendedPet && pet.id === recommendedPet.id;
       const isSelected = selectedPet && pet.id === selectedPet.id;
 
-      const petRow = document.createElement("div");
-      petRow.style.display = "flex";
-      petRow.style.alignItems = "center";
-      petRow.style.padding = "10px 14px";
-      petRow.style.borderRadius = "8px";
-      petRow.style.gap = "12px";
-      petRow.style.cursor = "pointer";
-      petRow.style.transition = "all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1)";
-
-      if (isSelected) {
-        petRow.style.background = "rgba(120, 185, 87, 0.12)";
-        petRow.style.border = "2px solid #78b957";
-        petRow.style.boxShadow = "0 4px 12px rgba(120, 185, 87, 0.15)";
-      } else if (isRecommended) {
-        petRow.style.background = "rgba(255, 255, 255, 0.5)";
-        petRow.style.border = "1.5px dashed #a855f7";
-        petRow.style.boxShadow = "none";
-      } else {
-        petRow.style.background = "rgba(255, 255, 255, 0.5)";
-        petRow.style.border = "1px solid rgba(223, 209, 181, 0.4)";
-        petRow.style.boxShadow = "none";
-      }
-
-      petRow.addEventListener("mouseover", () => {
-        if (!isSelected) {
-          petRow.style.borderColor = isRecommended ? "#b55fe6" : "rgba(120, 185, 87, 0.5)";
-          petRow.style.background = "rgba(255, 255, 255, 0.8)";
-        }
-      });
-      petRow.addEventListener("mouseleave", () => {
-        if (!isSelected) {
-          if (isRecommended) {
-            petRow.style.background = "rgba(255, 255, 255, 0.5)";
-            petRow.style.border = "1.5px dashed #a855f7";
-          } else {
-            petRow.style.background = "rgba(255, 255, 255, 0.5)";
-            petRow.style.border = "1px solid rgba(223, 209, 181, 0.4)";
-          }
-        }
-      });
-
-      const avatarBox = document.createElement("div");
-      avatarBox.style.width = "40px";
-      avatarBox.style.height = "42px";
-      avatarBox.style.flexShrink = "0";
-      avatarBox.style.borderRadius = "6px";
-      avatarBox.style.overflow = "hidden";
-      avatarBox.style.border = "1px solid #dfd1b5";
-      avatarBox.style.background = "rgba(255, 255, 255, 0.9)";
-      
-      const avatarSrc = projectPetSpriteUrl(pet);
-      const avatarSprite = createSprite(avatarSrc, pet.displayName);
-      avatarSprite.style.width = "40px";
-      avatarSprite.style.height = "42px";
-      avatarBox.append(avatarSprite);
+      const petRow = document.createElement("button");
+      petRow.className = "workshop-apply-pet selectable";
+      petRow.classList.toggle("selected", Boolean(isSelected));
+      petRow.classList.toggle("recommended", Boolean(isRecommended));
+      petRow.type = "button";
+      petRow.setAttribute("aria-pressed", String(Boolean(isSelected)));
 
       const infoBox = document.createElement("div");
-      infoBox.style.flex = "1";
-      infoBox.style.display = "flex";
-      infoBox.style.flexDirection = "column";
-      infoBox.style.gap = "2px";
+      infoBox.className = "workshop-apply-pet-info";
 
       const nameEl = document.createElement("div");
-      nameEl.style.fontSize = "14px";
-      nameEl.style.fontWeight = "bold";
-      nameEl.style.color = "#352c22";
+      nameEl.className = "workshop-apply-pet-name";
+      const name = document.createElement("strong");
+      name.textContent = pet.displayName;
+      nameEl.append(name);
       
       if (isSelected) {
         if (isRecommended) {
-          nameEl.innerHTML = `${pet.displayName} <span style="font-size: 10px; background: #a855f7; color: white; padding: 1.5px 6px; border-radius: 4px; margin-left: 6px; font-weight: normal; vertical-align: middle;">💡 推荐同名 (已选)</span>`;
+          nameEl.append(createMatchBadge("推荐原配 · 已选中", "selected"));
         } else {
-          nameEl.innerHTML = `${pet.displayName} <span style="font-size: 10px; background: #78b957; color: white; padding: 1.5px 6px; border-radius: 4px; margin-left: 6px; font-weight: normal; vertical-align: middle;">✓ 已选中</span>`;
+          nameEl.append(createMatchBadge("已选中", "selected"));
         }
       } else if (isRecommended) {
-        nameEl.innerHTML = `${pet.displayName} <span style="font-size: 10px; border: 1px dashed #a855f7; color: #a855f7; padding: 1.5px 5px; border-radius: 4px; margin-left: 6px; font-weight: normal; vertical-align: middle;">💡 推荐同名</span>`;
-      } else {
-        nameEl.textContent = pet.displayName;
+        nameEl.append(createMatchBadge("推荐原配", "recommend"));
       }
 
       const idEl = document.createElement("div");
-      idEl.style.fontSize = "11px";
-      idEl.style.color = "rgba(76, 60, 30, 0.5)";
+      idEl.className = "workshop-apply-pet-meta";
       idEl.textContent = pet.id;
 
       infoBox.append(nameEl, idEl);
-      petRow.append(avatarBox, infoBox);
+      petRow.append(createAvatar(projectPetSpriteUrl(pet), pet.displayName, randomAnimationForPet(pet)), infoBox);
 
       petRow.addEventListener("click", () => {
         selectedPet = pet;
@@ -3571,40 +3723,22 @@ async function choosePetToApply(item: WorkshopItem): Promise<void> {
     renderList(searchInput.value.trim().toLowerCase());
   });
 
-  // 6. 确定套用 & 放弃返回底栏操作按钮组件
   const actionRow = document.createElement("div");
-  actionRow.style.display = "flex";
-  actionRow.style.gap = "12px";
-  actionRow.style.marginTop = "16px";
+  actionRow.className = "workshop-apply-actions";
 
   const cancelBtn = document.createElement("button");
-  cancelBtn.className = "secondary-button";
+  cancelBtn.className = "secondary-button workshop-apply-action";
   cancelBtn.type = "button";
-  cancelBtn.style.flex = "1";
-  cancelBtn.style.padding = "10px 0";
-  cancelBtn.style.fontSize = "14px";
   cancelBtn.textContent = "取消";
-  cancelBtn.addEventListener("click", () => overlay.remove());
+  cancelBtn.addEventListener("click", () => closeModal());
 
   const confirmBtn = document.createElement("button");
-  confirmBtn.className = "primary-button";
+  confirmBtn.className = "primary-button workshop-apply-action";
   confirmBtn.type = "button";
-  confirmBtn.style.flex = "1";
-  confirmBtn.style.padding = "10px 0";
-  confirmBtn.style.fontSize = "14px";
-  confirmBtn.style.fontWeight = "bold";
   confirmBtn.textContent = "应用";
 
   const updateConfirmButtonState = () => {
-    if (selectedPet) {
-      confirmBtn.disabled = false;
-      confirmBtn.style.opacity = "1";
-      confirmBtn.style.cursor = "pointer";
-    } else {
-      confirmBtn.disabled = true;
-      confirmBtn.style.opacity = "0.5";
-      confirmBtn.style.cursor = "not-allowed";
-    }
+    confirmBtn.disabled = !selectedPet;
   };
 
   confirmBtn.addEventListener("click", () => {
@@ -3621,16 +3755,18 @@ async function choosePetToApply(item: WorkshopItem): Promise<void> {
       if (!proceed) return;
     }
 
-    overlay.remove();
+    closeModal();
     void applyCommunityActionToPet(item, selectedPet);
   });
 
   updateConfirmButtonState();
 
   actionRow.append(cancelBtn, confirmBtn);
-  modal.append(title, list, actionRow);
+  modal.append(header, searchField, list, actionRow);
   overlay.append(modal);
   document.body.append(overlay);
+  document.addEventListener("keydown", handleDialogKeydown);
+  searchInput.focus();
 }
 
 async function applyCommunityActionToPet(item: WorkshopItem, pet: ProjectPet): Promise<void> {
@@ -3691,20 +3827,6 @@ async function applyCommunityActionToPet(item: WorkshopItem, pet: ProjectPet): P
 
     window.alert(`🎉 套用成功！动作「${item.title}」已无缝集成到桌宠 ${pet.displayName} 中！召唤它即可在对应模式下自动播放！`);
     setStatus(els.workshopStatus, `成功将「${item.title}」动作套用到 ${pet.displayName}！`);
-
-    // 【高可用真实下载计数上报】向本地 Spring Boot 后端异步上报套用计数 (携带设备指纹授权并通过 Auth 拦截)
-    fetch("http://localhost:8080/api/workshop/download", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Device-UUID": getDeviceUuid()
-      },
-      body: JSON.stringify({ patchId: item.id })
-    }).then(res => {
-      if (res.ok) console.log("真实下载量异步上报成功！");
-    }).catch(err => {
-      console.warn("未检测到本地活跃的 Spring Boot 动态后端，跳过下载计数上报：", err);
-    });
   } catch (err) {
     console.error(err);
     window.alert(`套用动作失败：${err instanceof Error ? err.message : String(err)}`);
@@ -3715,9 +3837,8 @@ async function applyCommunityActionToPet(item: WorkshopItem, pet: ProjectPet): P
 async function fetchWorkshopItems(): Promise<void> {
   setStatus(els.workshopStatus, "正在同步云端创意工坊动作包...");
 
-  // 声明四合一极高可用弹性熔断链：(首选本地实时 Spring Boot 动态后端 -> 次选国内 GitMirror 加速代理 -> 三选 GitHub 直连 -> 终选极高可靠性 jsDelivr CDN 终极容灾)
+  // 动作索引是静态内容，按可用性在三个公共分发源之间回退。
   const endpoints = [
-    "http://localhost:8080/api/workshop/list",
     "https://raw.gitmirror.com/ZhangYiLong416/vibepet-workshop/main/patches/index.json",
     "https://raw.githubusercontent.com/ZhangYiLong416/vibepet-workshop/main/patches/index.json",
     "https://fastly.jsdelivr.net/gh/ZhangYiLong416/vibepet-workshop@main/patches/index.json"
@@ -3733,14 +3854,10 @@ async function fetchWorkshopItems(): Promise<void> {
       const listUrl = new URL(apiBase);
       listUrl.searchParams.set("t", String(Date.now())); // 追加随机时间戳，彻底击穿 WebView/CDN 本地缓存
 
-      // 根据不同的通道类型，展现极佳高知情的进度提醒
       if (i === 0) {
-        setStatus(els.workshopStatus, "正在通过本地 Spring Boot 动态服务器拉取真实下载量...");
-        activeChannel = "本地数据库(实时真实数)";
-      } else if (i === 1) {
         setStatus(els.workshopStatus, "正在通过国内加速通道同步创意工坊...");
         activeChannel = "国内加速镜像";
-      } else if (i === 2) {
+      } else if (i === 1) {
         setStatus(els.workshopStatus, "正在通过 GitHub 官方直连同步创意工坊...");
         activeChannel = "GitHub直连";
       } else {
@@ -3990,8 +4107,7 @@ async function shareCurrentActionToCommunity(): Promise<void> {
     const response = await fetch(WORKSHOP_SHARE_API, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        "X-Device-UUID": getDeviceUuid()
+        "Content-Type": "application/json"
       },
       body: JSON.stringify(payload)
     });
@@ -3999,8 +4115,8 @@ async function shareCurrentActionToCommunity(): Promise<void> {
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
 
-    window.alert(`🎉 分享提交成功！\n已成功自动为你在创意工坊仓库提交了 Pull Request 动作合并申请，等作者合并后，全网玩家即可一键套用！感谢你的贡献！`);
-    setStatus(els.editorStatus, `动作分享成功！已上传至云端并进入 PR 队列。`);
+    window.alert(`🎉 分享提交成功！\n动作已上传到创意工坊仓库，索引更新后即可在列表中浏览和套用。感谢你的贡献！`);
+    setStatus(els.editorStatus, "动作分享成功，等待社区索引更新。");
   } catch (err) {
     console.error(err);
     window.alert(`动作分享失败：${err instanceof Error ? err.message : String(err)}\n请检查网络连接或稍后重试。`);

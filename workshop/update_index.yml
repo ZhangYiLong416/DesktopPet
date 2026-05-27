@@ -2,7 +2,7 @@
 # 
 # 部署说明：
 # 在你的 GitHub 创意工坊仓库根目录下，新建路径 .github/workflows/update_index.yml
-# 将本文件内容贴进去即可。
+# 将本文件放入创意工坊数据仓库的 .github/workflows/update_index.yml。
 
 name: Update Workshop Global Index
 

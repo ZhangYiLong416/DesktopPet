@@ -2,7 +2,7 @@
  * VibePet Git-Based 社区创意工坊 - 客户端上传代理云函数
  * 
  * 部署指引：
- * 1. 扔入一个新建的 Vercel 免费项目中，路径为 api/share.ts
+ * 1. 部署到 Vercel 项目的 api/share.ts
  * 2. 在 Vercel 后台的环境变量 (Environment Variables) 中配置：
  *    - GITHUB_TOKEN: 拥有你 GitHub 创意工坊仓库写入权限的 Personal Access Token (PAT)
  *    - GITHUB_OWNER: 你的 GitHub 用户名
@@ -17,10 +17,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, X-Device-UUID'
-  );
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   // 处理 OPTIONS 预检请求
   if (req.method === 'OPTIONS') {
