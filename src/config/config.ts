@@ -103,6 +103,7 @@ const LS_FAVORITE_PET_IDS = "pet_favorite_pet_ids";
 const LS_CUSTOM_TAGS = "pet_custom_tags";
 const LS_PET_WINDOW_STATE_VERSION = "pet_window_state_version";
 const LS_PET_VOLUME = "pet-volume";
+const LS_SPEECH_BUBBLE_STYLE = "pet_speech_bubble_style";
 const BUILTIN_IKUN_PET: ProjectPet = {
   id: "ikun-pet",
   displayName: "鸡哥ikun",
@@ -148,6 +149,9 @@ interface SummonedPetWindow {
 
 type ViewName = "mine" | "recall" | "market" | "settings" | "editor" | "workshop";
 type SortName = "hot" | "latest" | "downloads";
+
+type EditorPreviewBackground = "checker" | "paper" | "gray" | "ink" | "mint" | "sky";
+const LS_EDITOR_PREVIEW_BACKGROUND = "pet_editor_preview_background";
 
 const els = {
   title: document.getElementById("view-title") as HTMLHeadingElement,
@@ -213,6 +217,7 @@ const els = {
   onlinePetCount: document.getElementById("online-pet-count") as HTMLElement,
   onlinePetAvatars: document.getElementById("online-pet-avatars") as HTMLDivElement,
   onlinePetAction: document.getElementById("online-pet-action") as HTMLButtonElement,
+  speechBubbleStyleRadios: [...document.querySelectorAll<HTMLInputElement>('input[name="speech-bubble-style"]')],
 
   // 创意工坊
   workshopGrid: document.getElementById("workshop-grid") as HTMLDivElement,
@@ -222,6 +227,7 @@ const els = {
 
   // 雪碧图编辑器
   editorView: document.getElementById("editor-view") as HTMLElement,
+  editorTopbarActions: document.getElementById("editor-topbar-actions") as HTMLDivElement,
   editorPetName: document.getElementById("editor-pet-name") as HTMLParagraphElement,
   editorStatus: document.getElementById("editor-status") as HTMLParagraphElement,
   editorFrameTitle: document.getElementById("editor-frame-title") as HTMLHeadingElement,
@@ -236,6 +242,9 @@ const els = {
   editorEraserSizeValue: document.getElementById("editor-eraser-size-value") as HTMLSpanElement,
   editorEraserUndo: document.getElementById("editor-eraser-undo-btn") as HTMLButtonElement,
   editorEraserCursor: document.getElementById("editor-eraser-cursor") as HTMLDivElement,
+  editorZoomSlider: document.getElementById("editor-zoom-slider") as HTMLInputElement,
+  editorZoomInput: document.getElementById("editor-zoom-input") as HTMLInputElement,
+  editorPreviewBackgroundRadios: [...document.querySelectorAll<HTMLInputElement>('input[name="editor-preview-background"]')],
   editorClear: document.getElementById("editor-clear-btn") as HTMLButtonElement,
   editorCopy: document.getElementById("editor-copy-btn") as HTMLButtonElement,
   editorPaste: document.getElementById("editor-paste-btn") as HTMLButtonElement,
@@ -273,6 +282,7 @@ const state = {
   editorPreviewMode: "frame" as "frame" | "action",
   editorPreviewFrame: 0,
   editorPreviewTimer: null as number | null,
+  editorSelectionType: "cell" as "cell" | "action",
   editorEraserEnabled: false,
   editorErasing: false,
   editorErasePointerId: null as number | null,
@@ -292,6 +302,8 @@ const state = {
   editorMoveSourceOffset: null as { x: number; y: number } | null,
   editorMoveChanged: false,
   editorDirty: false,
+  editorZoomScale: 1.0,
+  editorPreviewBackground: (localStorage.getItem(LS_EDITOR_PREVIEW_BACKGROUND) as EditorPreviewBackground) || "checker",
 
   // 创意工坊
   workshopItems: [] as WorkshopItem[],
@@ -328,9 +340,121 @@ async function getApiKey(): Promise<string> {
   return await invoke<string | null>("get_api_key") || "";
 }
 
+interface ActiveMessage {
+  id: string;
+  type: "success" | "error" | "info";
+  text: string;
+  el: HTMLDivElement;
+  timer: number;
+}
+let activeMessages: ActiveMessage[] = [];
+
+function destroyMessage(id: string): void {
+  const index = activeMessages.findIndex(m => m.id === id);
+  if (index === -1) return;
+  const msg = activeMessages[index];
+  msg.el.classList.remove("show");
+  msg.el.addEventListener("transitionend", () => {
+    msg.el.remove();
+  }, { once: true });
+
+  activeMessages.splice(index, 1);
+  repositionMessages();
+}
+
+function repositionMessages(): void {
+  activeMessages.forEach((msg, i) => {
+    const top = 20 + i * 55;
+    msg.el.style.top = `${top}px`;
+    msg.el.style.transform = `translateX(-50%)`;
+  });
+}
+
+function showMessage(text: string, type: "success" | "error" | "info" = "info"): void {
+  const lastMsg = activeMessages[activeMessages.length - 1];
+  if (lastMsg && lastMsg.type === type && (lastMsg.text === text || (type === "info" && text.includes("位移")))) {
+    lastMsg.text = text;
+    const textEl = lastMsg.el.querySelector(".vibe-message-text");
+    if (textEl) textEl.textContent = text;
+    clearTimeout(lastMsg.timer);
+    lastMsg.timer = window.setTimeout(() => {
+      destroyMessage(lastMsg.id);
+    }, 3000);
+    return;
+  }
+
+  const id = Math.random().toString(36).substring(2, 9);
+  const el = document.createElement("div");
+  el.className = `vibe-message-container vibe-message-${type}`;
+
+  const iconEl = document.createElement("span");
+  iconEl.className = "vibe-message-icon";
+  if (type === "success") {
+    iconEl.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+  } else if (type === "error") {
+    iconEl.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
+  } else {
+    iconEl.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`;
+  }
+
+  const textEl = document.createElement("span");
+  textEl.className = "vibe-message-text";
+  textEl.textContent = text;
+
+  el.appendChild(iconEl);
+  el.appendChild(textEl);
+  document.body.appendChild(el);
+
+  void el.offsetWidth;
+  el.classList.add("show");
+
+  const timer = window.setTimeout(() => {
+    destroyMessage(id);
+  }, 3000);
+
+  activeMessages.push({ id, type, text, el, timer });
+  repositionMessages();
+}
+
 function setStatus(el: HTMLElement, message = "", isError = false): void {
-  el.textContent = message;
-  el.classList.toggle("error", isError);
+  if (el) {
+    el.textContent = message;
+    el.classList.toggle("error", isError);
+  }
+
+  if ((el === els.editorStatus || el === els.workshopStatus) && message.trim()) {
+    let type: "success" | "error" | "info" = "info";
+    if (isError || message.includes("失败") || message.includes("错误") || message.includes("无法") || message.includes("不支持") || message.includes("已熔断")) {
+      type = "error";
+    } else if (message.includes("已复制") || message.includes("已粘贴") || message.includes("已替换") || message.includes("保存成功") || message.includes("套用成功") || message.includes("成功") || message.includes("已开启") || message.includes("已解锁")) {
+      type = "success";
+    }
+    showMessage(message, type);
+  }
+}
+
+function applyEditorCssZoom(scale: number): void {
+  state.editorZoomScale = scale;
+  if (els.editorFrameCanvas) {
+    els.editorFrameCanvas.style.width = `${Math.round(288 * scale)}px`;
+    els.editorFrameCanvas.style.height = `${Math.round(312 * scale)}px`;
+  }
+}
+
+function updateEditorZoomControls(percent: number): void {
+  const next = Math.min(150, Math.max(50, Math.round(percent)));
+  state.editorZoomScale = next / 100;
+  if (els.editorZoomSlider) els.editorZoomSlider.value = String(next);
+  if (els.editorZoomInput) els.editorZoomInput.value = String(next);
+  applyEditorCssZoom(state.editorZoomScale);
+}
+
+function applyEditorPreviewBackground(background: EditorPreviewBackground): void {
+  state.editorPreviewBackground = background;
+  localStorage.setItem(LS_EDITOR_PREVIEW_BACKGROUND, background);
+  if (els.editorFrameCanvas) {
+    els.editorFrameCanvas.dataset.previewBg = background;
+  }
 }
 
 function setApiConfigStatus(message = "", isError = false): void {
@@ -498,7 +622,7 @@ function setView(view: ViewName): void {
 
   const copy = {
     mine: ["我的桌宠", "管理本地宠物并召唤多个桌面实例。"],
-    editor: ["编辑桌宠", "按动作切分 WebP 图集，补齐固定模式动作。"],
+    editor: ["编辑桌宠", "自定义宠物动作。打造宠物专属技能。"],
     recall: ["宠物召回", "查看当前存在的宠物，并支持单独或批量召回。"],
     market: ["宠物市场", "下载新角色并保存到项目 pets 文件夹。"],
     workshop: ["创意工坊", "下载并一键套用社区精选的功德、专注及律动扩展动作。"],
@@ -506,6 +630,13 @@ function setView(view: ViewName): void {
   }[view];
   els.title.textContent = copy[0];
   els.subtitle.textContent = copy[1];
+
+  if (els.refresh) {
+    els.refresh.style.display = view === "mine" ? "" : "none";
+  }
+  if (els.editorTopbarActions) {
+    els.editorTopbarActions.style.display = view === "editor" ? "flex" : "none";
+  }
 
   if (view === "mine") void loadProjectPets();
   if (view === "recall") void loadActivePets();
@@ -574,7 +705,7 @@ function renderPagination(root: HTMLElement, total: number, page: number, onPage
 function filteredProjectPets(): ProjectPet[] {
   const query = els.mineSearch.value.trim().toLowerCase();
   const favoriteIds = new Set(getFavoritePetIds());
-  
+
   // 1. 根据当前选择的 Tag 进行首层过滤
   let pets = state.projectPets;
   if (state.currentMineTag === "favorite") {
@@ -614,7 +745,7 @@ function appendActiveTagCount(tab: HTMLButtonElement, tagName: string): void {
   tab.append(count);
 }
 
-function renderMineEmptyState(message: string): void {
+function renderMineEmptyState(message: string, container: HTMLElement = els.myPetsList): void {
   const empty = document.createElement("div");
   empty.className = "mine-empty-state";
 
@@ -629,7 +760,7 @@ function renderMineEmptyState(message: string): void {
   text.textContent = message;
 
   empty.append(image, text);
-  els.myPetsList.append(empty);
+  container.append(empty);
 }
 
 function renderListRow(options: {
@@ -646,7 +777,7 @@ function renderListRow(options: {
 
   const preview = document.createElement("div");
   preview.className = "pet-preview";
-  
+
   if (options.customPreview) {
     preview.append(options.customPreview);
     // 重定义以适配精致可爱的 56x60px 缩微动图动作框样式，无缝保持原样
@@ -677,7 +808,7 @@ function renderListRow(options: {
   const subtitle = document.createElement("p");
   subtitle.className = "meta";
   subtitle.textContent = options.subtitle;
-  
+
   info.append(titleWrapper, subtitle);
   if (options.metaExtra) {
     info.append(options.metaExtra);
@@ -727,113 +858,129 @@ function preserveScroll(fn: () => void): void {
 
 function renderMarket(totalPets: number = state.marketPets.length): void {
   preserveScroll(() => {
-  els.marketGrid.replaceChildren();
+    els.marketGrid.replaceChildren();
 
-  if (state.marketPets.length === 0) {
-    setStatus(els.marketStatus, "没有找到匹配的宠物。");
-    els.marketPagination.replaceChildren();
-    return;
-  }
+    if (state.marketPets.length === 0) {
+      setStatus(els.marketStatus, "没有找到匹配的宠物。");
+      els.marketPagination.replaceChildren();
+      return;
+    }
 
-  setStatus(els.marketStatus, `共 ${totalPets} 个宠物。`);
+    setStatus(els.marketStatus, `共 ${totalPets} 个宠物。`);
 
-  const fragment = document.createDocumentFragment();
-  for (const pet of state.marketPets) {
-    const button = document.createElement("button");
-    button.type = "button";
-    const downloaded = isDownloaded(pet.slug);
-    const downloading = state.downloading.has(pet.slug);
-    button.className = downloaded ? "summon-button" : "download-button";
-    button.textContent = downloaded ? "召唤" : downloading ? "下载中..." : "下载";
-    button.disabled = downloading;
-    button.addEventListener("click", () => {
-      if (downloaded) {
-        void summonPet(pet.slug, button, els.marketStatus);
-        return;
-      }
-      void downloadPet(pet);
+    const fragment = document.createDocumentFragment();
+    for (const pet of state.marketPets) {
+      const button = document.createElement("button");
+      button.type = "button";
+      const downloaded = isDownloaded(pet.slug);
+      const downloading = state.downloading.has(pet.slug);
+      button.className = downloaded ? "summon-button" : "download-button";
+      button.textContent = downloaded ? "召唤" : downloading ? "下载中..." : "下载";
+      button.disabled = downloading;
+      button.addEventListener("click", () => {
+        if (downloaded) {
+          void summonPet(pet.slug, button, els.marketStatus);
+          return;
+        }
+        void downloadPet(pet);
+      });
+
+      fragment.append(renderListRow({
+        title: petTitle(pet),
+        subtitle: `${pet.version || "v1.0.0"} · 下载 ${pet.download_count || 0}`,
+        spriteUrl: marketSpriteUrl(pet),
+        actions: [button],
+      }));
+    }
+    els.marketGrid.append(fragment);
+    renderPagination(els.marketPagination, totalPets, state.marketPage, (page) => {
+      void fetchMarketPets(page);
     });
-
-    fragment.append(renderListRow({
-      title: petTitle(pet),
-      subtitle: `${pet.version || "v1.0.0"} · 下载 ${pet.download_count || 0}`,
-      spriteUrl: marketSpriteUrl(pet),
-      actions: [button],
-    }));
-  }
-  els.marketGrid.append(fragment);
-  renderPagination(els.marketPagination, totalPets, state.marketPage, (page) => {
-    void fetchMarketPets(page);
-  });
   });
 }
 
 function renderMyPets(): void {
   preserveScroll(() => {
-  const pets = filteredProjectPets();
-  const pages = Math.max(1, Math.ceil(pets.length / PAGE_SIZE));
-  state.minePage = Math.min(state.minePage, pages);
-  els.myPetsList.replaceChildren();
+    const pets = filteredProjectPets();
+    const pages = Math.max(1, Math.ceil(pets.length / PAGE_SIZE));
+    state.minePage = Math.min(state.minePage, pages);
+    els.myPetsList.replaceChildren();
 
-  const selectedTagCount = mineTagPetCount(state.currentMineTag);
-  const selectedFilterName = state.currentMineTag === "favorite" ? "已收藏" : state.currentMineTag;
-  const hasSelectedFilter = state.currentMineTag !== "all";
-  if (pets.length === 0) {
+    const selectedTagCount = mineTagPetCount(state.currentMineTag);
+    const selectedFilterName = state.currentMineTag === "favorite" ? "已收藏" : state.currentMineTag;
+    const hasSelectedFilter = state.currentMineTag !== "all";
+    if (pets.length === 0) {
+      setStatus(
+        els.mineStatus,
+        hasSelectedFilter ? `「${selectedFilterName}」共 ${selectedTagCount} 只桌宠，当前没有匹配结果。` : "没有找到本地桌宠。"
+      );
+      renderMineEmptyState("小桌宠翻遍了标签，还没找到匹配的伙伴。");
+      els.minePagination.replaceChildren();
+      return;
+    }
     setStatus(
       els.mineStatus,
-      hasSelectedFilter ? `「${selectedFilterName}」共 ${selectedTagCount} 只桌宠，当前没有匹配结果。` : "没有找到本地桌宠。"
+      hasSelectedFilter ? `「${selectedFilterName}」共 ${selectedTagCount} 只桌宠。` : `本地已有 ${state.projectPets.length} 个桌宠。`
     );
-    renderMineEmptyState("小桌宠翻遍了标签，还没找到匹配的伙伴。");
-    els.minePagination.replaceChildren();
-    return;
-  }
-  setStatus(
-    els.mineStatus,
-    hasSelectedFilter ? `「${selectedFilterName}」共 ${selectedTagCount} 只桌宠。` : `本地已有 ${state.projectPets.length} 个桌宠。`
-  );
 
-  const favoriteIds = new Set(getFavoritePetIds());
-  const fragment = document.createDocumentFragment();
-  for (const pet of pageItems(pets, state.minePage)) {
-    const isFavorite = favoriteIds.has(pet.id);
+    const favoriteIds = new Set(getFavoritePetIds());
+    const fragment = document.createDocumentFragment();
+    for (const pet of pageItems(pets, state.minePage)) {
+      const isFavorite = favoriteIds.has(pet.id);
 
-    // 1. 创建绝对定位的分组勾选微型弹层（原本就存在的 dropdown，保持结构一致）
-    const dropdown = document.createElement("div");
-    dropdown.className = "pet-tags-dropdown";
-    dropdown.addEventListener("click", (e) => e.stopPropagation());
+      // 1. 创建绝对定位的分组勾选微型弹层（原本就存在的 dropdown，保持结构一致）
+      const dropdown = document.createElement("div");
+      dropdown.className = "pet-tags-dropdown";
+      dropdown.addEventListener("click", (e) => e.stopPropagation());
 
-    // 2. 构造左侧的 titleExtra 包装节点
-    const titleExtra = document.createElement("div");
-    titleExtra.className = "pet-title-extra";
+      // 2. 构造左侧的 titleExtra 包装节点
+      const titleExtra = document.createElement("div");
+      titleExtra.className = "pet-title-extra";
 
-    // 2.1 星星收藏图标化 (SVG 矢量图)
-    const favIcon = document.createElement("span");
-    favIcon.className = "pet-favorite-icon" + (isFavorite ? " active" : "");
-    favIcon.title = isFavorite ? "取消收藏" : "加入收藏";
-    favIcon.innerHTML = `
+      // 2.1 星星收藏图标化 (SVG 矢量图)
+      const favIcon = document.createElement("span");
+      favIcon.className = "pet-favorite-icon" + (isFavorite ? " active" : "");
+      favIcon.title = isFavorite ? "取消收藏" : "加入收藏";
+      favIcon.innerHTML = `
       <svg class="star-svg" viewBox="0 0 24 24" width="16" height="16">
         <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
       </svg>
     `;
-    favIcon.addEventListener("click", (e) => {
-      e.stopPropagation();
-      toggleFavoritePet(pet.id);
-      renderMyPets();
-    });
-    titleExtra.append(favIcon);
+      favIcon.addEventListener("click", (e) => {
+        e.stopPropagation();
+        toggleFavoritePet(pet.id);
+        renderMyPets();
+      });
+      titleExtra.append(favIcon);
 
-    // 2.2 标签（分组）小字列表与加号后置
-    const tagsWrapper = document.createElement("div");
-    tagsWrapper.className = "pet-tags-wrapper";
+      // 2.2 标签（分组）小字列表与加号后置
+      const tagsWrapper = document.createElement("div");
+      tagsWrapper.className = "pet-tags-wrapper";
 
-    const petTags = getPetTags(pet.id);
-    petTags.forEach((tag) => {
-      const tagBadge = document.createElement("span");
-      tagBadge.className = "pet-tag-badge";
-      tagBadge.textContent = tag;
-      
-      // 点击标签可以直接呼出多选分组下拉框，方便快速变更
-      tagBadge.addEventListener("click", (e) => {
+      const petTags = getPetTags(pet.id);
+      petTags.forEach((tag) => {
+        const tagBadge = document.createElement("span");
+        tagBadge.className = "pet-tag-badge";
+        tagBadge.textContent = tag;
+
+        // 点击标签可以直接呼出多选分组下拉框，方便快速变更
+        tagBadge.addEventListener("click", (e) => {
+          e.stopPropagation();
+          document.querySelectorAll(".pet-tags-dropdown.show").forEach((el) => {
+            if (el !== dropdown) el.classList.remove("show");
+          });
+          renderTagsDropdownList(pet.id, dropdown);
+          dropdown.classList.toggle("show");
+        });
+        tagsWrapper.append(tagBadge);
+      });
+
+      // 2.3 添加一个小字后置“+”号气泡
+      const addTagBtn = document.createElement("span");
+      addTagBtn.className = "pet-tag-add";
+      addTagBtn.textContent = "+";
+      addTagBtn.title = "管理分组标签";
+      addTagBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         document.querySelectorAll(".pet-tags-dropdown.show").forEach((el) => {
           if (el !== dropdown) el.classList.remove("show");
@@ -841,95 +988,79 @@ function renderMyPets(): void {
         renderTagsDropdownList(pet.id, dropdown);
         dropdown.classList.toggle("show");
       });
-      tagsWrapper.append(tagBadge);
-    });
+      tagsWrapper.append(addTagBtn, dropdown); // 将 dropdown 加入 tagsWrapper 内部以获得就近定位上下文
+      titleExtra.append(tagsWrapper);
 
-    // 2.3 添加一个小字后置“+”号气泡
-    const addTagBtn = document.createElement("span");
-    addTagBtn.className = "pet-tag-add";
-    addTagBtn.textContent = "+";
-    addTagBtn.title = "管理分组标签";
-    addTagBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      document.querySelectorAll(".pet-tags-dropdown.show").forEach((el) => {
-        if (el !== dropdown) el.classList.remove("show");
-      });
-      renderTagsDropdownList(pet.id, dropdown);
-      dropdown.classList.toggle("show");
-    });
-    tagsWrapper.append(addTagBtn, dropdown); // 将 dropdown 加入 tagsWrapper 内部以获得就近定位上下文
-    titleExtra.append(tagsWrapper);
+      // 3. 右侧核心操作按钮（只保留：召唤、编辑、删除）
+      const summon = document.createElement("button");
+      summon.className = "summon-button";
+      summon.type = "button";
+      summon.textContent = "召唤";
+      summon.addEventListener("click", () => void summonPet(pet.id, summon));
 
-    // 3. 右侧核心操作按钮（只保留：召唤、编辑、删除）
-    const summon = document.createElement("button");
-    summon.className = "summon-button";
-    summon.type = "button";
-    summon.textContent = "召唤";
-    summon.addEventListener("click", () => void summonPet(pet.id, summon));
+      const edit = document.createElement("button");
+      edit.className = "secondary-button";
+      edit.type = "button";
+      edit.textContent = "编辑";
+      edit.disabled = !!pet.builtin;
+      edit.addEventListener("click", () => void openSpriteEditor(pet));
 
-    const edit = document.createElement("button");
-    edit.className = "secondary-button";
-    edit.type = "button";
-    edit.textContent = "编辑";
-    edit.disabled = !!pet.builtin;
-    edit.addEventListener("click", () => void openSpriteEditor(pet));
+      // 3.1 删除按钮升级：二阶段倒计时防误触
+      const remove = document.createElement("button");
+      remove.className = "danger-button";
+      remove.type = "button";
+      remove.textContent = "删除";
+      remove.disabled = !!pet.builtin;
 
-    // 3.1 删除按钮升级：二阶段倒计时防误触
-    const remove = document.createElement("button");
-    remove.className = "danger-button";
-    remove.type = "button";
-    remove.textContent = "删除";
-    remove.disabled = !!pet.builtin;
+      let confirmTimer: number | null = null;
+      let isConfirming = false;
 
-    let confirmTimer: number | null = null;
-    let isConfirming = false;
+      remove.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (pet.builtin) return;
 
-    remove.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      if (pet.builtin) return;
+        if (!isConfirming) {
+          // 进入待确认状态
+          isConfirming = true;
+          remove.textContent = "确认删除？";
+          remove.classList.add("confirming");
 
-      if (!isConfirming) {
-        // 进入待确认状态
-        isConfirming = true;
-        remove.textContent = "确认删除？";
-        remove.classList.add("confirming");
-
-        // 3秒后自动重置为普通状态
-        confirmTimer = window.setTimeout(() => {
+          // 3秒后自动重置为普通状态
+          confirmTimer = window.setTimeout(() => {
+            isConfirming = false;
+            remove.textContent = "删除";
+            remove.classList.remove("confirming");
+          }, 3000);
+        } else {
+          // 确认删除！
+          if (confirmTimer) {
+            clearTimeout(confirmTimer);
+            confirmTimer = null;
+          }
           isConfirming = false;
-          remove.textContent = "删除";
-          remove.classList.remove("confirming");
-        }, 3000);
-      } else {
-        // 确认删除！
-        if (confirmTimer) {
-          clearTimeout(confirmTimer);
-          confirmTimer = null;
+          remove.textContent = "正在删除...";
+          remove.disabled = true;
+          await deletePet(pet);
         }
-        isConfirming = false;
-        remove.textContent = "正在删除...";
-        remove.disabled = true;
-        await deletePet(pet);
-      }
-    });
+      });
 
-    // 4. 调用 renderListRow 生成包含左侧 titleExtra 的行
-    const rowEl = renderListRow({
-      title: pet.displayName,
-      subtitle: `${pet.id} · ${pet.version || "v1.0.0"}${pet.builtin ? " · 内置" : ""}`,
-      spriteUrl: projectPetSpriteUrl(pet),
-      actions: [summon, edit, remove],
-      titleExtra,
-      metaExtra: createPersonalActionBadges(pet),
-    });
+      // 4. 调用 renderListRow 生成包含左侧 titleExtra 的行
+      const rowEl = renderListRow({
+        title: pet.displayName,
+        subtitle: `${pet.id} · ${pet.version || "v1.0.0"}${pet.builtin ? " · 内置" : ""}`,
+        spriteUrl: projectPetSpriteUrl(pet),
+        actions: [summon, edit, remove],
+        titleExtra,
+        metaExtra: createPersonalActionBadges(pet),
+      });
 
-    fragment.append(rowEl);
-  }
-  els.myPetsList.append(fragment);
-  renderPagination(els.minePagination, pets.length, state.minePage, (page) => {
-    state.minePage = page;
-    renderMyPets();
-  });
+      fragment.append(rowEl);
+    }
+    els.myPetsList.append(fragment);
+    renderPagination(els.minePagination, pets.length, state.minePage, (page) => {
+      state.minePage = page;
+      renderMyPets();
+    });
   });
 }
 
@@ -1046,13 +1177,13 @@ function updateInlineTags(tagsWrapper: HTMLElement, petId: string, dropdown: HTM
   // 2. 重新获取这只桌宠当前的最新标签数据并渲染
   const petTags = getPetTags(petId);
   const addTagBtn = tagsWrapper.querySelector(".pet-tag-add");
-  
+
   if (addTagBtn) {
     petTags.forEach((tag) => {
       const tagBadge = document.createElement("span");
       tagBadge.className = "pet-tag-badge";
       tagBadge.textContent = tag;
-      
+
       // 点击这个小字标签，同样允许一键呼出/关闭弹层，极佳的直觉交互
       tagBadge.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -1062,7 +1193,7 @@ function updateInlineTags(tagsWrapper: HTMLElement, petId: string, dropdown: HTM
         renderTagsDropdownList(petId, dropdown);
         dropdown.classList.toggle("show");
       });
-      
+
       // 优雅插入在“+”号按钮之前，保持标签在前、+号在后的漂亮版面
       tagsWrapper.insertBefore(tagBadge, addTagBtn);
     });
@@ -1094,7 +1225,7 @@ function renderTagsDropdownList(petId: string, dropdown: HTMLDivElement): void {
     for (const tagName of tagNames) {
       const item = document.createElement("label");
       item.className = "tags-dropdown-item";
-      
+
       const check = document.createElement("input");
       check.type = "checkbox";
       check.checked = petTags.includes(tagName);
@@ -1129,7 +1260,7 @@ function renderTagsDropdownList(petId: string, dropdown: HTMLDivElement): void {
 
   const footer = document.createElement("div");
   footer.className = "tags-dropdown-footer";
-  
+
   const addLink = document.createElement("a");
   addLink.className = "tags-dropdown-add-link";
   addLink.textContent = "+ 新建分组";
@@ -1346,6 +1477,7 @@ function renderActivePets(): void {
     if (state.activePetWindows.length === 0) {
       setStatus(els.activePetsStatus, "当前没有可召回的桌宠。");
       els.recallSelectedPets.disabled = true;
+      renderMineEmptyState("桌面上静悄悄的，没有可召回的桌宠。", els.activePetsList);
       return;
     }
 
@@ -1685,6 +1817,18 @@ function updateVolumeControls(percent: number): void {
   els.volumeText.textContent = `${next}%`;
 }
 
+function updateBubbleStyleControls(value: string): void {
+  localStorage.setItem(LS_SPEECH_BUBBLE_STYLE, value);
+  for (const radio of els.speechBubbleStyleRadios) {
+    const isChecked = radio.value === value;
+    radio.checked = isChecked;
+    const card = radio.closest(".bubble-style-card");
+    if (card) {
+      card.classList.toggle("active", isChecked);
+    }
+  }
+}
+
 async function loadSettings(): Promise<void> {
   els.autostartToggle.checked = await isEnabled().catch(() => false);
   els.alwaysTopToggle.checked = localStorage.getItem("pet-always-on-top") !== "false";
@@ -1704,12 +1848,18 @@ async function loadSettings(): Promise<void> {
   updateVolumeControls(getPetVolumePercent());
   els.chatMode.value = localStorage.getItem(LS_CHAT_MODE) || "basic";
   els.persona.value = localStorage.getItem(LS_PERSONA_MODE) || "tsundere";
+  updateBubbleStyleControls(localStorage.getItem(LS_SPEECH_BUBBLE_STYLE) || "1");
   els.customPersona.value = localStorage.getItem(LS_CUSTOM_PERSONA) || "";
   els.apiEndpoint.value = localStorage.getItem(LS_API_ENDPOINT) || "";
   els.apiModel.value = localStorage.getItem(LS_API_MODEL) || "gpt-3.5-turbo";
   els.apiKey.value = await getApiKey().catch(() => "");
   updateApiConfigVisibility();
   updatePersonaVisibility();
+  const editorPreviewBackground = (localStorage.getItem(LS_EDITOR_PREVIEW_BACKGROUND) as EditorPreviewBackground) || "checker";
+  for (const radio of els.editorPreviewBackgroundRadios) {
+    radio.checked = radio.value === editorPreviewBackground;
+  }
+  applyEditorPreviewBackground(editorPreviewBackground);
   void loadPetsPath();
 }
 
@@ -1817,7 +1967,7 @@ els.summonGroupBtn.addEventListener("click", async () => {
     setStatus(els.mineStatus, `成功召唤了「${state.currentMineTag}」分组下的全部 ${currentFilteredPets.length} 只桌宠。`);
     window.setTimeout(() => void loadActivePets(), 300);
     updateSummonGroupButton("召唤完成", "✓", "success");
-    
+
   } catch (err) {
     console.error(err);
     setStatus(els.mineStatus, `一键群召失败：${err instanceof Error ? err.message : String(err)}`, true);
@@ -1873,6 +2023,29 @@ els.musicRhythmSyncRadios.forEach((radio) => {
     localStorage.setItem(LS_MUSIC_RHYTHM_SYNC_MODE, radio.value);
   });
 });
+if (els.editorZoomSlider) {
+  els.editorZoomSlider.addEventListener("input", () => {
+    updateEditorZoomControls(Number(els.editorZoomSlider.value));
+  });
+}
+if (els.editorZoomInput) {
+  const applyEditorZoomInput = (): void => {
+    updateEditorZoomControls(Number(els.editorZoomInput.value));
+  };
+  els.editorZoomInput.addEventListener("blur", applyEditorZoomInput);
+  els.editorZoomInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      applyEditorZoomInput();
+      els.editorZoomInput.blur();
+    }
+  });
+}
+els.editorPreviewBackgroundRadios.forEach((radio) => {
+  radio.addEventListener("change", () => {
+    if (!radio.checked) return;
+    applyEditorPreviewBackground(radio.value as EditorPreviewBackground);
+  });
+});
 els.sizePresets.forEach((button) => {
   button.addEventListener("click", () => {
     const percent = Number(button.dataset.sizePercent);
@@ -1906,6 +2079,13 @@ els.persona.addEventListener("change", () => {
   updatePersonaVisibility();
 });
 els.customPersona.addEventListener("input", () => localStorage.setItem(LS_CUSTOM_PERSONA, els.customPersona.value.trim()));
+els.speechBubbleStyleRadios.forEach((radio) => {
+  radio.addEventListener("change", () => {
+    if (radio.checked) {
+      updateBubbleStyleControls(radio.value);
+    }
+  });
+});
 els.apiEndpoint.addEventListener("change", () => {
   const endpoint = normalizeApiEndpoint(els.apiEndpoint.value);
   els.apiEndpoint.value = endpoint;
@@ -1944,220 +2124,230 @@ els.toggleApiKeyVisibility.addEventListener("click", () => {
 });
 
 
-  // ==========================================
-  // 雪碧图编辑器与创意工坊事件监听绑定
-  // ==========================================
-  els.editorBack.addEventListener("click", () => setView("mine"));
-  els.editorSave.addEventListener("click", () => void saveSpriteEditor());
-  
-  els.editorReplace.addEventListener("click", () => {
-    els.editorUpload.click();
-  });
-  
-  els.editorUpload.addEventListener("change", () => {
-    const file = els.editorUpload.files?.[0];
-    if (file) {
-      void replaceSelectedEditorFrame(file).then(() => {
-        els.editorUpload.value = "";
-      });
-    }
-  });
+// ==========================================
+// 雪碧图编辑器与创意工坊事件监听绑定
+// ==========================================
+els.editorBack.addEventListener("click", () => setView("mine"));
+els.editorSave.addEventListener("click", () => void saveSpriteEditor());
 
-  els.editorClear.addEventListener("click", () => {
-    const frame = z();
-    if (!frame) return;
+els.editorReplace.addEventListener("click", () => {
+  els.editorUpload.click();
+});
+
+els.editorUpload.addEventListener("change", () => {
+  const file = els.editorUpload.files?.[0];
+  if (file) {
+    void replaceSelectedEditorFrame(file).then(() => {
+      els.editorUpload.value = "";
+    });
+  }
+});
+
+els.editorClear.addEventListener("click", () => {
+  const frame = z();
+  if (!frame) return;
+  recordEditorEraserUndo(frame);
+  saveCanvasFrame(null);
+  renderSpriteEditorGrid();
+  drawSelectedEditorFrame();
+  setStatus(els.editorStatus, "已清空当前帧。");
+});
+
+els.editorCopy.addEventListener("click", () => copySelectedEditorFrame());
+els.editorPaste.addEventListener("click", () => pasteSelectedEditorFrame());
+els.editorMoveUndo.addEventListener("click", () => undoFrameNudge());
+
+els.editorNudgeButtons.forEach((btn) => {
+  const nudge = btn.dataset.frameNudge;
+  if (nudge) {
+    const [dx, dy] = nudge.split(",").map(Number);
+    btn.addEventListener("click", () => nudgeFrameOffset(dx, dy));
+  }
+});
+
+els.editorModePresets.forEach((btn) => {
+  const mode = btn.dataset.actionKey as ModeActionKey;
+  if (mode) {
+    btn.addEventListener("click", () => selectEditorModeAction(mode));
+  }
+});
+
+els.editorAlignAction.addEventListener("click", () => void optimizeActionFramesAlignment());
+
+els.actionStripImport.addEventListener("click", () => {
+  els.actionStripUpload.click();
+});
+
+els.actionStripUpload.addEventListener("change", () => {
+  const file = els.actionStripUpload.files?.[0];
+  if (file) {
+    void importActionStripImage(file).then(() => {
+      els.actionStripUpload.value = "";
+    });
+  }
+});
+
+els.promptCopy.addEventListener("click", () => void copyTextToClipboard(els.imagePromptOutput.value).then(() => {
+  setStatus(els.editorStatus, "已成功复制 AI 描述词到剪贴板！");
+}));
+
+els.editorEraser.addEventListener("click", () => {
+  state.editorEraserEnabled = !state.editorEraserEnabled;
+  updateEditorEraserUi();
+});
+
+els.editorEraserSize.addEventListener("input", () => {
+  state.editorEraseBrushSize = Number(els.editorEraserSize.value);
+  updateEditorEraserUi();
+});
+
+els.editorEraserUndo.addEventListener("click", () => undoEditorEraser());
+
+// 帧编辑 Canvas 手绘擦除与拖拽移动鼠标/触摸事件
+els.editorFrameCanvas.addEventListener("pointerdown", (event) => {
+  const frame = z();
+  if (!frame) return;
+
+  if (state.editorEraserEnabled) {
+    event.preventDefault();
+    els.editorFrameCanvas.setPointerCapture(event.pointerId);
+    state.editorErasing = true;
+    state.editorErasePointerId = event.pointerId;
     recordEditorEraserUndo(frame);
-    saveCanvasFrame(null);
-    renderSpriteEditorGrid();
-    drawSelectedEditorFrame();
-    setStatus(els.editorStatus, "已清空当前帧。");
-  });
+    const coords = getCanvasCoordinates(event);
+    state.editorEraseLastPoint = coords;
+    performCanvasEraserDraw(null, coords);
+  } else if (state.editorPreviewMode === "frame") {
+    event.preventDefault();
+    els.editorFrameCanvas.setPointerCapture(event.pointerId);
+    state.editorMoving = true;
+    state.editorMovePointerId = event.pointerId;
+    state.editorMoveOrigin = { x: event.clientX, y: event.clientY };
+    state.editorMoveSourceFrame = P(frame);
 
-  els.editorCopy.addEventListener("click", () => copySelectedEditorFrame());
-  els.editorPaste.addEventListener("click", () => pasteSelectedEditorFrame());
-  els.editorMoveUndo.addEventListener("click", () => undoFrameNudge());
+    const action = state.editorActions[state.editorSelectedRow];
+    const offset = action?.stripOffsets?.[state.editorSelectedCol];
+    state.editorMoveSourceOffset = offset ? { ...offset } : { x: 0, y: 0 };
+    state.editorMoveChanged = false;
+    updateEditorMoveControls();
+  }
+});
 
-  els.editorNudgeButtons.forEach((btn) => {
-    const nudge = btn.dataset.frameNudge;
-    if (nudge) {
-      const [dx, dy] = nudge.split(",").map(Number);
-      btn.addEventListener("click", () => nudgeFrameOffset(dx, dy));
-    }
-  });
-
-  els.editorModePresets.forEach((btn) => {
-    const mode = btn.dataset.actionKey as ModeActionKey;
-    if (mode) {
-      btn.addEventListener("click", () => selectEditorModeAction(mode));
-    }
-  });
-
-  els.editorAlignAction.addEventListener("click", () => void optimizeActionFramesAlignment());
-
-  els.actionStripImport.addEventListener("click", () => {
-    els.actionStripUpload.click();
-  });
-
-  els.actionStripUpload.addEventListener("change", () => {
-    const file = els.actionStripUpload.files?.[0];
-    if (file) {
-      void importActionStripImage(file).then(() => {
-        els.actionStripUpload.value = "";
-      });
-    }
-  });
-
-  els.promptCopy.addEventListener("click", () => void copyTextToClipboard(els.imagePromptOutput.value).then(() => {
-    setStatus(els.editorStatus, "已成功复制 AI 描述词到剪贴板！");
-  }));
-
-  els.editorEraser.addEventListener("click", () => {
-    state.editorEraserEnabled = !state.editorEraserEnabled;
-    updateEditorEraserUi();
-  });
-
-  els.editorEraserSize.addEventListener("input", () => {
-    state.editorEraseBrushSize = Number(els.editorEraserSize.value);
-    updateEditorEraserUi();
-  });
-
-  els.editorEraserUndo.addEventListener("click", () => undoEditorEraser());
-
-  // 帧编辑 Canvas 手绘擦除与拖拽移动鼠标/触摸事件
-  els.editorFrameCanvas.addEventListener("pointerdown", (event) => {
-    const frame = z();
-    if (!frame) return;
-
-    if (state.editorEraserEnabled) {
+els.editorFrameCanvas.addEventListener("pointermove", (event) => {
+  if (state.editorEraserEnabled) {
+    updateEraserCursorPosition(event);
+    if (state.editorErasing && state.editorErasePointerId === event.pointerId) {
       event.preventDefault();
-      els.editorFrameCanvas.setPointerCapture(event.pointerId);
-      state.editorErasing = true;
-      state.editorErasePointerId = event.pointerId;
-      recordEditorEraserUndo(frame);
       const coords = getCanvasCoordinates(event);
+      performCanvasEraserDraw(state.editorEraseLastPoint, coords);
       state.editorEraseLastPoint = coords;
-      performCanvasEraserDraw(null, coords);
-    } else if (state.editorPreviewMode === "frame") {
-      event.preventDefault();
-      els.editorFrameCanvas.setPointerCapture(event.pointerId);
-      state.editorMoving = true;
-      state.editorMovePointerId = event.pointerId;
-      state.editorMoveOrigin = { x: event.clientX, y: event.clientY };
-      state.editorMoveSourceFrame = P(frame);
-      
+    }
+  } else if (state.editorMoving && state.editorMovePointerId === event.pointerId && state.editorMoveOrigin && state.editorMoveSourceFrame && state.editorMoveSourceOffset) {
+    event.preventDefault();
+    const dx = Math.round((event.clientX - state.editorMoveOrigin.x) * ATLAS_CELL_WIDTH / els.editorFrameCanvas.getBoundingClientRect().width);
+    const dy = Math.round((event.clientY - state.editorMoveOrigin.y) * ATLAS_CELL_HEIGHT / els.editorFrameCanvas.getBoundingClientRect().height);
+
+    if (dx !== 0 || dy !== 0) {
       const action = state.editorActions[state.editorSelectedRow];
-      const offset = action?.stripOffsets?.[state.editorSelectedCol];
-      state.editorMoveSourceOffset = offset ? { ...offset } : { x: 0, y: 0 };
-      state.editorMoveChanged = false;
-      updateEditorMoveControls();
-    }
-  });
-
-  els.editorFrameCanvas.addEventListener("pointermove", (event) => {
-    if (state.editorEraserEnabled) {
-      updateEraserCursorPosition(event);
-      if (state.editorErasing && state.editorErasePointerId === event.pointerId) {
-        event.preventDefault();
-        const coords = getCanvasCoordinates(event);
-        performCanvasEraserDraw(state.editorEraseLastPoint, coords);
-        state.editorEraseLastPoint = coords;
-      }
-    } else if (state.editorMoving && state.editorMovePointerId === event.pointerId && state.editorMoveOrigin && state.editorMoveSourceFrame && state.editorMoveSourceOffset) {
-      event.preventDefault();
-      const dx = Math.round((event.clientX - state.editorMoveOrigin.x) * ATLAS_CELL_WIDTH / els.editorFrameCanvas.getBoundingClientRect().width);
-      const dy = Math.round((event.clientY - state.editorMoveOrigin.y) * ATLAS_CELL_HEIGHT / els.editorFrameCanvas.getBoundingClientRect().height);
-
-      if (dx !== 0 || dy !== 0) {
-        const action = state.editorActions[state.editorSelectedRow];
-        if (action) {
-          if (isStripImageFrameValid(action, state.editorSelectedCol)) {
-            action.stripOffsets![state.editorSelectedCol].x = state.editorMoveSourceOffset.x + dx;
-            action.stripOffsets![state.editorSelectedCol].y = state.editorMoveSourceOffset.y + dy;
-            action.frames[state.editorSelectedCol] = getStripImageFrame(action, state.editorSelectedCol);
-          } else {
-            action.frames[state.editorSelectedCol] = moveFrameOffset(state.editorMoveSourceFrame, dx, dy);
-          }
-          state.editorMoveChanged = true;
-          const viewCtx = els.editorFrameCanvas.getContext("2d");
-          viewCtx?.clearRect(0, 0, ATLAS_CELL_WIDTH, ATLAS_CELL_HEIGHT);
-          const currentFrame = action.frames[state.editorSelectedCol];
-          if (currentFrame) viewCtx?.drawImage(currentFrame, 0, 0);
+      if (action) {
+        if (isStripImageFrameValid(action, state.editorSelectedCol)) {
+          action.stripOffsets![state.editorSelectedCol].x = state.editorMoveSourceOffset.x + dx;
+          action.stripOffsets![state.editorSelectedCol].y = state.editorMoveSourceOffset.y + dy;
+          action.frames[state.editorSelectedCol] = getStripImageFrame(action, state.editorSelectedCol);
+        } else {
+          action.frames[state.editorSelectedCol] = moveFrameOffset(state.editorMoveSourceFrame, dx, dy);
         }
+        state.editorMoveChanged = true;
+        const viewCtx = els.editorFrameCanvas.getContext("2d");
+        viewCtx?.clearRect(0, 0, ATLAS_CELL_WIDTH, ATLAS_CELL_HEIGHT);
+        const currentFrame = action.frames[state.editorSelectedCol];
+        if (currentFrame) viewCtx?.drawImage(currentFrame, 0, 0);
       }
     }
-  });
+  }
+});
 
-  const finishInteraction = (event: PointerEvent) => {
-    if (state.editorEraserEnabled) {
-      if (state.editorErasing && state.editorErasePointerId === event.pointerId) {
-        els.editorFrameCanvas.releasePointerCapture(event.pointerId);
-        finishEditorCanvasErasing();
-      }
-    } else if (state.editorMoving && state.editorMovePointerId === event.pointerId) {
+const finishInteraction = (event: PointerEvent) => {
+  if (state.editorEraserEnabled) {
+    if (state.editorErasing && state.editorErasePointerId === event.pointerId) {
       els.editorFrameCanvas.releasePointerCapture(event.pointerId);
-      finishEditorCanvasDragging();
+      finishEditorCanvasErasing();
     }
-  };
+  } else if (state.editorMoving && state.editorMovePointerId === event.pointerId) {
+    els.editorFrameCanvas.releasePointerCapture(event.pointerId);
+    finishEditorCanvasDragging();
+  }
+};
 
-  els.editorFrameCanvas.addEventListener("pointerup", finishInteraction);
-  els.editorFrameCanvas.addEventListener("pointercancel", finishInteraction);
-  
-  //pointerleave 中的 event 设为未使用
-  els.editorFrameCanvas.addEventListener("pointerleave", () => {
-    if (state.editorEraserEnabled) hideEraserCursor();
-  });
+els.editorFrameCanvas.addEventListener("pointerup", finishInteraction);
+els.editorFrameCanvas.addEventListener("pointercancel", finishInteraction);
 
-  // 创意工坊搜索与过滤事件
-  els.workshopSearch.addEventListener("input", () => {
-    state.workshopSearchQuery = els.workshopSearch.value;
-    renderWorkshop();
-  });
+//pointerleave 中的 event 设为未使用
+els.editorFrameCanvas.addEventListener("pointerleave", () => {
+  if (state.editorEraserEnabled) hideEraserCursor();
+});
 
-  els.workshopActionFilter.addEventListener("change", () => {
-    state.workshopFilterType = els.workshopActionFilter.value;
-    renderWorkshop();
-  });
+// 创意工坊搜索与过滤事件
+els.workshopSearch.addEventListener("input", () => {
+  state.workshopSearchQuery = els.workshopSearch.value;
+  renderWorkshop();
+});
 
-  document.addEventListener("click", (event) => {
-    const tab = (event.target as HTMLElement).closest("#workshop-tags-list .tag-tab");
-    if (tab) {
-      const parent = document.getElementById("workshop-tags-list");
-      if (parent) {
-        const tabs = parent.querySelectorAll(".tag-tab");
-        tabs.forEach((t) => t.classList.remove("active"));
-        tab.classList.add("active");
-        state.currentWorkshopTag = tab.getAttribute("data-tag") || "all";
-        renderWorkshop();
+els.workshopActionFilter.addEventListener("change", () => {
+  state.workshopFilterType = els.workshopActionFilter.value;
+  renderWorkshop();
+});
+
+document.addEventListener("click", (event) => {
+  const tab = (event.target as HTMLElement).closest("#workshop-tags-list .tag-tab");
+  if (tab) {
+    const parent = document.getElementById("workshop-tags-list");
+    if (parent) {
+      const tabs = parent.querySelectorAll(".tag-tab");
+      tabs.forEach((t) => t.classList.remove("active"));
+      tab.classList.add("active");
+      state.currentWorkshopTag = tab.getAttribute("data-tag") || "all";
+      renderWorkshop();
+    }
+  }
+});
+
+// 分享按钮点击
+els.actionStripShare.addEventListener("click", () => void shareCurrentActionToCommunity());
+
+window.addEventListener("keydown", (event) => {
+  if (state.view !== "editor") return;
+  const isEditingText = document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLTextAreaElement;
+  if (isEditingText) return;
+
+  if (event.ctrlKey || event.metaKey) {
+    if (event.key.toLowerCase() === "c") {
+      event.preventDefault();
+      copySelectedEditorFrame();
+    } else if (event.key.toLowerCase() === "z") {
+      event.preventDefault();
+      if (state.editorEraserUndoFrame) {
+        undoEditorEraser();
+      } else if (state.editorMoveUndoFrame) {
+        undoFrameNudge();
       }
     }
-  });
-
-  // 分享按钮点击
-  els.actionStripShare.addEventListener("click", () => void shareCurrentActionToCommunity());
-
-  window.addEventListener("keydown", (event) => {
-    if (state.view !== "editor") return;
-    const isEditingText = document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLTextAreaElement;
-    if (isEditingText) return;
-
-    if (event.ctrlKey || event.metaKey) {
-      if (event.key.toLowerCase() === "c") {
-        event.preventDefault();
-        copySelectedEditorFrame();
-      } else if (event.key.toLowerCase() === "z") {
-        event.preventDefault();
-        if (state.editorEraserUndoFrame) {
-          undoEditorEraser();
-        } else if (state.editorMoveUndoFrame) {
-          undoFrameNudge();
-        }
-      }
+  } else if (event.key === "Escape" || event.key === "Backspace") {
+    event.preventDefault();
+    const frame = z();
+    if (frame) {
+      recordEditorEraserUndo(frame);
+      saveCanvasFrame(null);
+      renderSpriteEditorGrid();
+      drawSelectedEditorFrame();
+      setStatus(els.editorStatus, "已清空当前选中的单元格内容。");
     }
-  });
+  }
+});
 
-  window.addEventListener("paste", (event) => void At(event));
+window.addEventListener("paste", (event) => void At(event));
 
-  void loadPetsPath();
+void loadPetsPath();
 void loadProjectPets();
 void fetchMarketPets();
 void loadSettings();
@@ -2249,6 +2439,7 @@ function clearEditorMoveUndoStates(): void {
 }
 
 function recordEditorMoveUndo(frame: HTMLCanvasElement): void {
+  clearEditorUndoStates();
   const action = state.editorActions[state.editorSelectedRow];
   state.editorMoveUndoFrame = P(frame);
   state.editorMoveUndoRow = state.editorSelectedRow;
@@ -2312,6 +2503,7 @@ function finishEditorCanvasDragging(saveMessage = true): void {
 }
 
 function recordEditorEraserUndo(frame: HTMLCanvasElement): void {
+  clearEditorMoveUndoStates();
   state.editorEraserUndoFrame = P(frame);
   state.editorEraserUndoRow = state.editorSelectedRow;
   state.editorEraserUndoCol = state.editorSelectedCol;
@@ -2392,7 +2584,6 @@ function finishEditorCanvasErasing(saveMessage = true): void {
 function saveCanvasFrame(canvas: HTMLCanvasElement | null): void {
   const action = state.editorActions[state.editorSelectedRow];
   if (action) {
-    clearEditorUndoStates();
     clearStripImageSource(action);
     action.frames[state.editorSelectedCol] = P(canvas);
     if (action.key && action.key in MODE_ACTION_PRESETS) {
@@ -2404,17 +2595,38 @@ function saveCanvasFrame(canvas: HTMLCanvasElement | null): void {
 
 function copySelectedEditorFrame(): void {
   const frame = z();
-  if (!frameHasContent(frame)) {
+  if (!frame || !frameHasContent(frame)) {
     setStatus(els.editorStatus, "当前帧为空，无法复制。", true);
     return;
   }
   state.editorClipboard = P(frame);
   els.editorPaste.disabled = false;
-  setStatus(els.editorStatus, `已复制第 ${state.editorSelectedRow + 1} 行第 ${state.editorSelectedCol + 1} 帧到剪贴板。`);
+
+  try {
+    frame.toBlob((blob) => {
+      if (blob) {
+        navigator.clipboard.write([
+          new ClipboardItem({
+            "image/png": blob
+          })
+        ]).then(() => {
+          setStatus(els.editorStatus, `已复制第 ${state.editorSelectedRow + 1} 行第 ${state.editorSelectedCol + 1} 帧到系统剪贴板。`);
+        }).catch((err) => {
+          console.error("写入系统剪贴板失败:", err);
+          setStatus(els.editorStatus, `已复制第 ${state.editorSelectedRow + 1} 行第 ${state.editorSelectedCol + 1} 帧到应用剪贴板，但写入系统剪贴板受限：${err}`, true);
+        });
+      }
+    }, "image/png");
+  } catch (err) {
+    console.error("复制到系统剪贴板异常:", err);
+    setStatus(els.editorStatus, `已复制第 ${state.editorSelectedRow + 1} 行第 ${state.editorSelectedCol + 1} 帧到应用剪贴板。`);
+  }
 }
 
 function pasteSelectedEditorFrame(): void {
   if (!state.editorClipboard) return;
+  const frame = z();
+  if (frame) recordEditorEraserUndo(frame);
   saveCanvasFrame(state.editorClipboard);
   drawSelectedEditorFrame();
   renderSpriteEditorGrid();
@@ -2439,7 +2651,8 @@ async function replaceSelectedEditorFrame(file: File): Promise<void> {
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(cropped, dx, dy, w, h);
 
-    clearEditorUndoStates();
+    const frame = z();
+    if (frame) recordEditorEraserUndo(frame);
     saveCanvasFrame(canvas);
     renderSpriteEditorGrid();
     drawSelectedEditorFrame();
@@ -2449,105 +2662,55 @@ async function replaceSelectedEditorFrame(file: File): Promise<void> {
   }
 }
 
-function convertTwoByTwoToStrip(image: HTMLImageElement): HTMLCanvasElement {
-  const width = image.naturalWidth;
-  const height = image.naturalHeight;
-  
-  const halfWidth = Math.floor(width / 2);
-  const halfHeight = Math.floor(height / 2);
-
-  const canvas = document.createElement("canvas");
-  canvas.width = 4 * ATLAS_CELL_WIDTH;
-  canvas.height = ATLAS_CELL_HEIGHT;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("无法创建画布处理 2x2 拼图");
-
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-
-  // 4 个单元格分别对应 [行, 列]:
-  // [0, 0] 左上 -> 帧 0
-  // [0, 1] 右上 -> 帧 1
-  // [1, 0] 左下 -> 帧 2
-  // [1, 1] 右下 -> 帧 3
-  const cells = [
-    { sx: 0, sy: 0 },
-    { sx: halfWidth, sy: 0 },
-    { sx: 0, sy: halfHeight },
-    { sx: halfWidth, sy: halfHeight }
-  ];
-
-  for (let i = 0; i < 4; i++) {
-    const cell = cells[i];
-    const cellCanvas = document.createElement("canvas");
-    cellCanvas.width = halfWidth;
-    cellCanvas.height = halfHeight;
-    const cellCtx = cellCanvas.getContext("2d");
-    if (cellCtx) {
-      cellCtx.drawImage(image, cell.sx, cell.sy, halfWidth, halfHeight, 0, 0, halfWidth, halfHeight);
-      
-      // 对单帧进行背景裁剪和自动居中
-      const processedCell = cropAndAutoCenterImage(cellCanvas);
-      
-      const targetX = i * ATLAS_CELL_WIDTH;
-      const scale = Math.min(ATLAS_CELL_WIDTH / processedCell.width, ATLAS_CELL_HEIGHT / processedCell.height);
-      const drawW = processedCell.width * scale;
-      const drawH = processedCell.height * scale;
-      const drawX = targetX + (ATLAS_CELL_WIDTH - drawW) / 2;
-      const drawY = (ATLAS_CELL_HEIGHT - drawH) / 2;
-      
-      ctx.drawImage(processedCell, drawX, drawY, drawW, drawH);
-    }
-  }
-
-  return canvas;
-}
-
 async function importActionStripImage(file: File): Promise<void> {
   const action = state.editorActions[state.editorSelectedRow];
   if (!action) {
     setStatus(els.editorStatus, "请先选择要导入的动作。", true);
     return;
   }
-  if (!action.key || !(action.key in MODE_ACTION_PRESETS)) {
-    setStatus(els.editorStatus, "请先选择功德模式、专注模式或音乐律动，再导入对应帧数的横版图。", true);
-    return;
+  let framesCount = 8;
+  if (action.key && action.key in MODE_ACTION_PRESETS) {
+    framesCount = MODE_ACTION_PRESETS[action.key as ModeActionKey].frames;
   }
-
-  const framesCount = MODE_ACTION_PRESETS[action.key as ModeActionKey].frames;
   const originalText = els.actionStripImport.textContent || `导入横版 ${framesCount} 帧图`;
   els.actionStripImport.disabled = true;
   els.actionStripImport.textContent = "导入中...";
   try {
     const rawImage = await loadImageFile(file);
-    
-    // 自动判断是否是 2*2 的拼合图
+
     const imgWidth = rawImage.naturalWidth;
     const imgHeight = rawImage.naturalHeight;
-    const isTwoByTwo = imgWidth > 10 && imgHeight > 10 && (imgWidth / imgHeight >= 0.7 && imgWidth / imgHeight <= 1.3);
 
-    let targetFramesCount = framesCount;
-    let canvas: HTMLCanvasElement;
+    const singleW = imgWidth / framesCount;
+    const canvas = document.createElement("canvas");
+    canvas.width = framesCount * ATLAS_CELL_WIDTH;
+    canvas.height = ATLAS_CELL_HEIGHT;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("无法处理导入图片。");
 
-    if (isTwoByTwo) {
-      targetFramesCount = 4;
-      canvas = convertTwoByTwoToStrip(rawImage);
-    } else {
-      const processed = cropAndAutoCenterImage(rawImage);
-      canvas = document.createElement("canvas");
-      canvas.width = targetFramesCount * ATLAS_CELL_WIDTH;
-      canvas.height = ATLAS_CELL_HEIGHT;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("无法处理导入图片。");
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
 
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "high";
-      ctx.drawImage(processed, 0, 0, canvas.width, canvas.height);
+    for (let i = 0; i < framesCount; i++) {
+      const sx = i * singleW;
+      const sy = 0;
+
+      const scale = Math.min(ATLAS_CELL_WIDTH / singleW, ATLAS_CELL_HEIGHT / imgHeight);
+      const drawW = singleW * scale;
+      const drawH = imgHeight * scale;
+      const dx = i * ATLAS_CELL_WIDTH + (ATLAS_CELL_WIDTH - drawW) / 2;
+      const dy = (ATLAS_CELL_HEIGHT - drawH) / 2;
+
+      ctx.drawImage(
+        rawImage,
+        sx, sy, singleW, imgHeight,
+        dx, dy, drawW, drawH
+      );
     }
 
     action.stripSource = canvas;
-    action.stripFrameCount = targetFramesCount;
-    action.stripOffsets = Array.from({ length: targetFramesCount }, () => ({ x: 0, y: 0 }));
+    action.stripFrameCount = framesCount;
+    action.stripOffsets = Array.from({ length: framesCount }, () => ({ x: 0, y: 0 }));
     action.pendingFramePngSave = true;
 
     const frames = getStripFrames(action);
@@ -2579,6 +2742,7 @@ function selectEditorModeAction(key: ModeActionKey): void {
   const action = state.editorActions[row];
   state.editorSelectedRow = row;
   state.editorSelectedCol = 0;
+  state.editorSelectionType = "action";
   state.editorPreviewMode = "action";
   updateActionPromptPreview();
   renderSpriteEditorGrid();
@@ -3100,8 +3264,8 @@ function calculateOptimalOffset(templateFeatures: { x: number; y: number; r: num
           score -= 8; continue;
         }
         const diff = Math.abs(feat.r - targetData.data[offset]) +
-                     Math.abs(feat.g - targetData.data[offset + 1]) +
-                     Math.abs(feat.b - targetData.data[offset + 2]);
+          Math.abs(feat.g - targetData.data[offset + 1]) +
+          Math.abs(feat.b - targetData.data[offset + 2]);
         score += diff <= 18 ? 14 : diff <= 54 ? 7 : diff <= 96 ? 2 : -2;
       }
 
@@ -3216,8 +3380,7 @@ async function At(event: ClipboardEvent): Promise<void> {
   }
   event.preventDefault();
 
-  const action = state.editorActions[state.editorSelectedRow];
-  if (action?.key && action.key in MODE_ACTION_PRESETS) {
+  if (state.editorSelectionType === "action") {
     await importActionStripImage(file);
   } else {
     await replaceSelectedEditorFrame(file);
@@ -3304,7 +3467,7 @@ function renderWorkshop(): void {
     previewContainer.style.height = "60px";
     previewContainer.style.borderRadius = "6px";
     previewContainer.style.overflow = "hidden";
-    
+
     // 使用精细背景子属性单独赋值，彻底避免 background 简写重置并失效为 auto auto 的渲染 Bug
     previewContainer.style.backgroundImage = `url("${item.imageUrl}")`;
     previewContainer.style.backgroundRepeat = "no-repeat";
@@ -3342,7 +3505,7 @@ function renderWorkshop(): void {
       badgeSpan.style.color = "#5b21b6";
       badgeSpan.style.borderColor = "rgba(139, 92, 246, 0.25)";
     }
-    
+
     const titleExtra = document.createElement("div");
     titleExtra.className = "pet-title-extra";
     titleExtra.append(badgeSpan);
@@ -3397,7 +3560,7 @@ function getMatchScore(itemTitle: string, pet: ProjectPet): number {
   const titleLower = itemTitle.toLowerCase();
   const petNameLower = pet.displayName.toLowerCase();
   const petIdLower = pet.id.toLowerCase();
-  
+
   if (titleLower.includes(petNameLower) || petNameLower.includes(titleLower)) return 100;
   if (titleLower.includes(petIdLower) || petIdLower.includes(titleLower)) return 90;
 
@@ -3615,24 +3778,24 @@ async function choosePetToApply(item: WorkshopItem): Promise<void> {
             petId: marketPet.slug,
             downloadUrl: marketDownloadUrl(marketPet),
           });
-          
+
           await loadProjectPets();
-          
+
           localPets = state.projectPets.filter((p) => !p.builtin);
           exactLocalMatch = localPets.find((p) => p.id === item.petId);
-          
+
           petsWithScores = localPets.map((pet) => ({
             pet,
             score: getMatchScore(item.title, pet) + (pet.id === item.petId ? 1000 : 0),
           }));
           petsWithScores.sort((a, b) => b.score - a.score);
-          
+
           recommendedPet = exactLocalMatch || (petsWithScores[0]?.score > 0 ? petsWithScores[0].pet : null);
           hasMatchingPet = !!recommendedPet;
-          
+
           showVirtualItem = false;
           selectedPet = exactLocalMatch || null;
-          
+
           renderList(searchInput.value.trim().toLowerCase());
           updateConfirmButtonState();
         } catch (err) {
@@ -3689,7 +3852,7 @@ async function choosePetToApply(item: WorkshopItem): Promise<void> {
       const name = document.createElement("strong");
       name.textContent = pet.displayName;
       nameEl.append(name);
-      
+
       if (isSelected) {
         if (isRecommended) {
           nameEl.append(createMatchBadge("推荐原配 · 已选中", "selected"));
@@ -3774,7 +3937,7 @@ async function applyCommunityActionToPet(item: WorkshopItem, pet: ProjectPet): P
   try {
     const image = await loadImageElement(item.imageUrl);
     const origImage = await loadSpritesheetImage(pet);
-    
+
     const origCols = ATLAS_COLS;
     const origRows = Math.max(1, Math.floor(origImage.height / ATLAS_CELL_HEIGHT));
     const animations = pet.animations || {};
@@ -3897,8 +4060,8 @@ async function fetchWorkshopItems(): Promise<void> {
   } else {
     console.error("创意工坊所有高可用同步通道均告折戟：", lastError);
     setStatus(
-      els.workshopStatus, 
-      `创意工坊同步失败：所有网络通道已熔断。请检查本地网络或关闭代理防火墙安全拦截。(错误：${lastError ? lastError.message : "未知"})`, 
+      els.workshopStatus,
+      `创意工坊同步失败：所有网络通道已熔断。请检查本地网络或关闭代理防火墙安全拦截。(错误：${lastError ? lastError.message : "未知"})`,
       true
     );
   }
@@ -4139,7 +4302,12 @@ async function openSpriteEditor(pet: ProjectPet): Promise<void> {
     state.editorSelectedRow = 0;
     state.editorSelectedCol = 0;
     state.editorClipboard = null;
+    state.editorSelectionType = "cell";
     state.editorPreviewMode = "frame";
+    state.editorZoomScale = 1.0;
+    if (els.editorZoomSlider) els.editorZoomSlider.value = "100";
+    if (els.editorZoomInput) els.editorZoomInput.value = "100";
+    applyEditorCssZoom(1.0);
     state.editorEraserEnabled = false;
     state.editorErasing = false;
     state.editorErasePointerId = null;
@@ -4158,7 +4326,7 @@ async function openSpriteEditor(pet: ProjectPet): Promise<void> {
     state.editorMoveSourceOffset = null;
     state.editorMoveChanged = false;
     state.editorDirty = false;
-    
+
     stopEditorActionPreview();
     updateEditorEraserUi();
     els.editorPetName.textContent = `${pet.displayName} · ${pet.spritesheetPath}`;
@@ -4180,12 +4348,12 @@ async function openSpriteEditor(pet: ProjectPet): Promise<void> {
         canvas.getContext("2d")?.drawImage(image, col * ATLAS_CELL_WIDTH, row * ATLAS_CELL_HEIGHT, ATLAS_CELL_WIDTH, ATLAS_CELL_HEIGHT, 0, 0, ATLAS_CELL_WIDTH, ATLAS_CELL_HEIGHT);
         frames.push(canvas);
       }
-      
-      const defaultPresetKey = row >= DEFAULT_ACTION_NAMES.length && row < DEFAULT_ACTION_NAMES.length + Object.keys(MODE_ACTION_PRESETS).length 
+
+      const defaultPresetKey = row >= DEFAULT_ACTION_NAMES.length && row < DEFAULT_ACTION_NAMES.length + Object.keys(MODE_ACTION_PRESETS).length
         ? Object.keys(MODE_ACTION_PRESETS)[row - DEFAULT_ACTION_NAMES.length] as ModeActionKey
         : undefined;
       const animKey = getPetAnimationKeyByRow(pet, row) || defaultPresetKey;
-      
+
       state.editorActions.push({
         name: animKey && animKey in MODE_ACTION_PRESETS ? MODE_ACTION_PRESETS[animKey as ModeActionKey].label : DEFAULT_ACTION_NAMES[row] || `动作 ${row + 1}`,
         key: animKey as ModeActionKey,
@@ -4227,6 +4395,7 @@ function renderSpriteEditorGrid(): void {
     labelBtn.addEventListener("click", () => {
       state.editorSelectedRow = rowIndex;
       state.editorSelectedCol = 0;
+      state.editorSelectionType = "action";
       state.editorPreviewMode = "action";
       updateActionPromptPreview();
       renderSpriteEditorGrid();
@@ -4241,7 +4410,7 @@ function renderSpriteEditorGrid(): void {
       button.type = "button";
       button.classList.toggle("active", rowIndex === state.editorSelectedRow && colIndex === state.editorSelectedCol);
       button.setAttribute("aria-label", `${action.name} 第 ${colIndex + 1} 帧`);
-      
+
       if (frameHasContent(frame)) {
         const image = document.createElement("img");
         image.alt = "";
@@ -4257,6 +4426,7 @@ function renderSpriteEditorGrid(): void {
       button.addEventListener("click", () => {
         state.editorSelectedRow = rowIndex;
         state.editorSelectedCol = colIndex;
+        state.editorSelectionType = "cell";
         state.editorPreviewMode = "frame";
         updateActionPromptPreview();
         renderSpriteEditorGrid();

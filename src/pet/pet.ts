@@ -63,6 +63,8 @@ const MODE_ANIMATION_PRESETS: Record<string, FrameAnimation> = {
 // ── Audio SFX (HTML5 Audio, no external libs) ──
 
 const LS_PET_VOLUME = "pet-volume";
+const LS_SPEECH_BUBBLE_STYLE = "pet_speech_bubble_style";
+const SPEECH_BUBBLE_STYLE_IDS = new Set(["1", "2", "3", "5", "6", "7", "8", "9"]);
 
 const sfx = {
   pop: new Audio(new URL("../assets/audio/pop.mp3", import.meta.url).href),
@@ -3254,17 +3256,32 @@ function checkSpecialDayAndTime(): string {
   return "今天也要开心哦！";
 }
 
+function getSpeechBubbleStyle(): string {
+  const saved = localStorage.getItem(LS_SPEECH_BUBBLE_STYLE) || "1";
+  return SPEECH_BUBBLE_STYLE_IDS.has(saved) ? saved : "1";
+}
+
+function applySpeechBubbleStyle(): void {
+  const bubble = document.getElementById("pet-speech-bubble");
+  if (!bubble) return;
+  bubble.dataset.bubbleStyle = getSpeechBubbleStyle();
+}
+
 function showSpeech(text: string, durationMs: number, withSound = true): void {
   const bubble = document.getElementById("pet-speech-bubble");
   const bubbleText = bubble?.querySelector(".bubble-text") as HTMLElement | null;
   if (!bubble || !bubbleText || !text) return;
 
+  if ((window as any).speechBubbleTimerId) clearTimeout((window as any).speechBubbleTimerId);
+
+  applySpeechBubbleStyle();
   bubbleText.textContent = text;
   bubble.classList.add("show-bubble");
   if (withSound) playSound("bubble");
 
-  setTimeout(() => {
+  (window as any).speechBubbleTimerId = setTimeout(() => {
     bubble.classList.remove("show-bubble");
+    (window as any).speechBubbleTimerId = null;
   }, durationMs);
 }
 
@@ -3337,6 +3354,24 @@ async function main(): Promise<void> {
     localStorage.setItem(LS_MERIT_TEXT, MERIT_DEFAULT_TEXT);
   }
   localStorage.setItem(LS_MERIT_ENABLED, "false");
+  applySpeechBubbleStyle();
+  window.addEventListener("storage", (event) => {
+    if (event.key === LS_SPEECH_BUBBLE_STYLE) {
+      applySpeechBubbleStyle();
+      const styleNameMap: Record<string, string> = {
+        "1": "暖黄双边",
+        "2": "星河物语",
+        "3": "云雾缭绕",
+        "5": "烈焰红唇",
+        "6": "森林私语",
+        "7": "落日余晖",
+        "8": "深海探秘",
+        "9": "极光幻境"
+      };
+      const styleName = styleNameMap[event.newValue || "1"] || "默认";
+      showSpeech(`已切换为【${styleName}】气泡皮肤`, 3000);
+    }
+  });
 
   const spriteEl = document.getElementById("pet-sprite");
   if (!spriteEl) {

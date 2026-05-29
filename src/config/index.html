@@ -39,7 +39,13 @@
             <h2 id="view-title">我的桌宠</h2>
             <p id="view-subtitle">管理本地宠物并召唤多个桌面实例。</p>
           </div>
-          <button id="refresh-btn" class="ghost-button refresh-button" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.2-4.8L4 8"></path><path d="M4 4v4h4"></path><path d="M4 13a8 8 0 0 0 14.2 4.8L20 16"></path><path d="M20 20v-4h-4"></path></svg><span>刷新</span></button>
+          <div class="topbar-actions" style="display: flex; align-items: center; gap: 8px;">
+            <button id="refresh-btn" class="ghost-button refresh-button" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.2-4.8L4 8"></path><path d="M4 4v4h4"></path><path d="M4 13a8 8 0 0 0 14.2 4.8L20 16"></path><path d="M20 20v-4h-4"></path></svg><span>刷新</span></button>
+            <div id="editor-topbar-actions" class="editor-topbar-actions" style="display: none; gap: 8px;">
+              <button id="editor-back-btn" class="ghost-button" type="button">返回列表</button>
+              <button id="editor-save-btn" class="primary-button" type="button">保存 WebP</button>
+            </div>
+          </div>
         </header>
 
         <section id="mine-view" class="view active">
@@ -72,19 +78,22 @@
         </section>
 
         <section id="editor-view" class="view">
-          <div class="panel-head">
+          <div class="panel-head" style="display: none !important;">
             <div>
               <p id="editor-pet-name" class="path-text"></p>
             </div>
             <div class="row-actions">
-              <button id="editor-back-btn" class="ghost-button" type="button">返回列表</button>
-              <button id="editor-save-btn" class="primary-button" type="button">保存 WebP</button>
+              <button class="ghost-button" type="button">返回列表</button>
+              <button class="primary-button" type="button">保存 WebP</button>
             </div>
           </div>
           <p id="editor-status" class="status"></p>
           <div class="sprite-editor-shell">
             <section class="sprite-editor-main" aria-label="桌宠帧编辑">
-              <h3 id="editor-frame-title">帧编辑</h3>
+              <div class="editor-main-header">
+  <h3 id="editor-frame-title">帧编辑</h3>
+  <span class="workspace-badge">工作区</span>
+</div>
               <div class="frame-stage-wrap">
                 <canvas id="editor-frame-canvas" width="192" height="208" tabindex="0" aria-label="当前帧预览，未启用橡皮擦时可拖动调整位置"></canvas>
                 <div class="editor-eraser-toolbar" aria-label="橡皮擦工具">
@@ -101,11 +110,13 @@
               <div class="editor-card">
                 <h3>帧操作</h3>
                 <input id="editor-upload-input" type="file" accept="image/png,image/jpeg,image/webp" hidden />
-                <button id="editor-replace-btn" class="secondary-button" type="button">替换帧</button>
-                <button id="editor-clear-btn" class="secondary-button" type="button">清空帧</button>
-                <button id="editor-copy-btn" class="secondary-button" type="button">复制帧</button>
-                <button id="editor-paste-btn" class="secondary-button" type="button" disabled>粘贴帧</button>
-                <div class="frame-position-tools" aria-label="当前帧位置微调">
+                <div class="editor-buttons-grid">
+                  <button id="editor-replace-btn" class="secondary-button" type="button">替换帧</button>
+                  <button id="editor-copy-btn" class="secondary-button" type="button">复制帧</button>
+                  <button id="editor-paste-btn" class="secondary-button" type="button" disabled>粘贴帧</button>
+                  <button id="editor-clear-btn" class="secondary-button" type="button">删除帧</button>
+                </div>
+                <div class="frame-position-tools" aria-label="当前帧位置微调" style="display: none !important;">
                   <strong>位置微调</strong>
                   <div class="frame-nudge-grid">
                     <button class="secondary-button frame-nudge-up" data-frame-nudge="up" type="button" aria-label="向上移动一像素">↑</button>
@@ -116,28 +127,69 @@
                   <button id="editor-move-undo-btn" class="secondary-button" type="button" disabled>撤销位移</button>
                   <small>也可在大图中拖动当前帧，或使用键盘方向键。横版图会保留原图取景，保存时才生成最终分帧。</small>
                 </div>
+                <div class="frame-zoom-tools" aria-label="动作画面缩放">
+                  <strong>画面缩放</strong>
+                  <div class="zoom-slider-row">
+                    <input id="editor-zoom-slider" type="range" min="50" max="150" value="100" aria-label="画面缩放比例" />
+                    <label class="zoom-number-field">
+                      <input id="editor-zoom-input" type="number" min="50" max="150" value="100" />
+                      <span>%</span>
+                    </label>
+                  </div>
+                  <small>拖动滑块或输入数值直接实时缩放。Ctrl+Z 可完美撤销。</small>
+                </div>
+                <div class="preview-background-tools" aria-label="纯色背景板预览">
+                  <strong>预览背景板</strong>
+                  <div class="preview-background-options" role="radiogroup" aria-label="切换预览背景板">
+                    <label class="preview-background-option">
+                      <input type="radio" name="editor-preview-background" value="checker" checked />
+                      <span class="preview-background-swatch preview-background-checker"></span>
+                      <span>透明棋盘</span>
+                    </label>
+                    <label class="preview-background-option">
+                      <input type="radio" name="editor-preview-background" value="paper" />
+                      <span class="preview-background-swatch preview-background-paper"></span>
+                      <span>米白</span>
+                    </label>
+                    <label class="preview-background-option">
+                      <input type="radio" name="editor-preview-background" value="gray" />
+                      <span class="preview-background-swatch preview-background-gray"></span>
+                      <span>浅灰</span>
+                    </label>
+                    <label class="preview-background-option">
+                      <input type="radio" name="editor-preview-background" value="ink" />
+                      <span class="preview-background-swatch preview-background-ink"></span>
+                      <span>墨黑</span>
+                    </label>
+                    <label class="preview-background-option">
+                      <input type="radio" name="editor-preview-background" value="mint" />
+                      <span class="preview-background-swatch preview-background-mint"></span>
+                      <span>薄荷绿</span>
+                    </label>
+                    <label class="preview-background-option">
+                      <input type="radio" name="editor-preview-background" value="sky" />
+                      <span class="preview-background-swatch preview-background-sky"></span>
+                      <span>天空蓝</span>
+                    </label>
+                  </div>
+                  <small>仅用于预览，背景色仅限制在中间原始正方形帧内。</small>
+                </div>
               </div>
               <div class="editor-card">
-                <h3>动作</h3>
+                <h3>模式关联与分享</h3>
                 <div class="mode-action-buttons">
                   <button class="secondary-button mode-action-preset" data-action-key="merit" type="button">功德模式</button>
                   <button class="secondary-button mode-action-preset" data-action-key="focus" type="button">专注模式</button>
                   <button class="secondary-button mode-action-preset" data-action-key="music" type="button">音乐律动</button>
                 </div>
-                <button id="editor-align-action-btn" class="align-action-button" type="button">一键优化动作对齐</button>
-                <small class="editor-hint">功德和专注模式使用 4 帧，音乐律动使用 8 帧。普通动作可替换帧或 Ctrl+V 粘贴到当前帧；选择模式动作后，Ctrl+V 会按该模式帧数导入横版动作图。</small>
-              </div>
-              <div class="editor-card">
-                <h3>动作提示词</h3>
                 <input id="action-strip-upload-input" type="file" accept="image/png,image/jpeg,image/webp" hidden />
-                <label class="prompt-label" for="image-prompt-output">提示词</label>
-                <textarea id="image-prompt-output" rows="6" readonly spellcheck="false"></textarea>
-                <div class="prompt-actions">
-                  <button id="prompt-copy-btn" class="secondary-button" type="button">一键复制提示词</button>
-                  <button id="action-strip-import-btn" class="import-action-button" type="button">导入横版动作图</button>
-                  <button id="action-strip-share-btn" class="primary-button" type="button" style="grid-column: span 2; margin-top: 6px; background-color: #8b5cf6 !important; border-color: #8b5cf6 !important; color: white !important;">分享当前动作到社区</button>
-                </div>
-                <small class="editor-hint">先手动选择一张现有动作帧作为参考图，右键可复制图片或另存到本地，再复制当前模式提示词去外部工具生成横版动作图。点击导入或直接 Ctrl+V 粘贴图片，都会按当前模式所需帧数切分并填入动作，同时保存 PNG 到当前宠物目录。</small>
+                <button id="action-strip-share-btn" class="primary-button" type="button" style="background-color: #8b5cf6 !important; border-color: #8b5cf6 !important; color: white !important; font-weight: 800; font-size: 14px; padding: 12px; margin-top: 8px;">分享当前动作到社区</button>
+                
+                <!-- 隐藏的后向兼容辅助元素 -->
+                <button id="editor-align-action-btn" type="button" style="display: none !important;"></button>
+                <button id="action-strip-import-btn" type="button" style="display: none !important;"></button>
+                <button id="prompt-copy-btn" type="button" style="display: none !important;"></button>
+                <textarea id="image-prompt-output" style="display: none !important;"></textarea>
               </div>
             </aside>
           </div>
@@ -254,6 +306,70 @@
                   <label class="pet-mode-option">
                     <input type="radio" name="pet-activity-level" value="active" />
                     <span>满屏乱串</span>
+                  </label>
+                </div>
+              </div>
+              <div class="setting-row speech-bubble-setting-row">
+                <span>
+                  <strong>气泡皮肤样式</strong>
+                  <small>为桌宠选择对话与专注模式下的特色气泡。</small>
+                </span>
+                <div class="bubble-style-grid" role="radiogroup" aria-label="选择气泡皮肤">
+                  <label class="bubble-style-card" data-style="1">
+                    <input type="radio" name="speech-bubble-style" value="1" />
+                    <div class="bubble-style-preview">
+                      <span class="preview-inner-text">暖黄双边</span>
+                    </div>
+                    <span class="bubble-style-name">暖黄双边</span>
+                  </label>
+                  <label class="bubble-style-card" data-style="2">
+                    <input type="radio" name="speech-bubble-style" value="2" />
+                    <div class="bubble-style-preview">
+                      <span class="preview-inner-text">星河物语</span>
+                    </div>
+                    <span class="bubble-style-name">星河物语</span>
+                  </label>
+                  <label class="bubble-style-card" data-style="3">
+                    <input type="radio" name="speech-bubble-style" value="3" />
+                    <div class="bubble-style-preview">
+                      <span class="preview-inner-text">云雾缭绕</span>
+                    </div>
+                    <span class="bubble-style-name">云雾缭绕</span>
+                  </label>
+                  <label class="bubble-style-card" data-style="5">
+                    <input type="radio" name="speech-bubble-style" value="5" />
+                    <div class="bubble-style-preview">
+                      <span class="preview-inner-text">烈焰红唇</span>
+                    </div>
+                    <span class="bubble-style-name">烈焰红唇</span>
+                  </label>
+                  <label class="bubble-style-card" data-style="6">
+                    <input type="radio" name="speech-bubble-style" value="6" />
+                    <div class="bubble-style-preview">
+                      <span class="preview-inner-text">森林私语</span>
+                    </div>
+                    <span class="bubble-style-name">森林私语</span>
+                  </label>
+                  <label class="bubble-style-card" data-style="7">
+                    <input type="radio" name="speech-bubble-style" value="7" />
+                    <div class="bubble-style-preview">
+                      <span class="preview-inner-text">落日余晖</span>
+                    </div>
+                    <span class="bubble-style-name">落日余晖</span>
+                  </label>
+                  <label class="bubble-style-card" data-style="8">
+                    <input type="radio" name="speech-bubble-style" value="8" />
+                    <div class="bubble-style-preview">
+                      <span class="preview-inner-text">深海探秘</span>
+                    </div>
+                    <span class="bubble-style-name">深海探秘</span>
+                  </label>
+                  <label class="bubble-style-card" data-style="9">
+                    <input type="radio" name="speech-bubble-style" value="9" />
+                    <div class="bubble-style-preview">
+                      <span class="preview-inner-text">极光幻境</span>
+                    </div>
+                    <span class="bubble-style-name">极光幻境</span>
                   </label>
                 </div>
               </div>

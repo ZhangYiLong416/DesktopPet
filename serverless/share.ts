@@ -71,6 +71,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       author: cleanAuthor,
       petId,
       actionType,
+      status: 'published',
       framesCount: Number(framesCount || 8),
       frameDuration: Number(frameDuration || 120),
       promptUsed: promptUsed || '',

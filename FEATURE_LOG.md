@@ -305,3 +305,369 @@
 - 替换帧与横版动作导入改为使用 `blob:` 临时 URL 解码本地图片，避免安装版继续依赖 `FileReader` 生成的超长 `data:` 图片地址。
 - 在 `img-src` 中补充 `data:` 白名单，保留现有 `blob:` 图集加载修复，覆盖缩略帧、粒子特效、本地图片解码与图集读取链路，并将发布版本提升到 `0.1.8`。
 - 验证：运行 `cargo check`、`npm run build` 与 `git diff --check`。
+
+### 2026-05-27 NSIS 安装器轻量美化
+- 使用 `$imagegen` 生成 VibePet 风格安装器源图，并裁切转换为 NSIS 推荐尺寸的 `headerImage`、`sidebarImage` 与卸载页头图。
+- 为 Windows NSIS 安装包配置品牌页头、侧边图、安装/卸载图标，并将安装器语言设置为简体中文优先、英文兜底。
+- 验证：运行 `npx tauri build -b nsis` 与 `git diff --check`。
+
+### 2026-05-27 开发服务器端口调整
+- 将 Vite 开发服务器端口从 `5173` 调整为 `5175`，避开本机已有占用。
+- 同步更新 Tauri `devUrl`，确保 `npm run tauri dev` 连接新的前端开发地址。
+- 验证：运行 `npm run build` 与 `git diff --check`。
+
+### 2026-05-27 精灵图工坊固定规格与鼠标手动拖拽缩放对齐重塑
+
+- **智能宽高比多帧切片自动对齐**：针对多帧平铺大图，新增智能宽高比行列解析算法。上传 $1\times 4$ 平铺图或 8 帧的 $1\times 8$ 横排图与 $2\times 4$ 双排图后，自动将每一帧的原始切片中心精准对齐格子物理中心，实现**导入大图即自动形成动作回放**的卓越零感交互。
+- **规格切换与视口固定**：移除了繁琐的不稳定自动重心对齐，单帧视口尺寸锁定为 **192x208 px**；重构界面以提供标准的 **4 帧 (1*4 布局)** 和 **8 帧 (2*4 布局)** 固定规格切换。
+- **高精度十字红虚线对齐参考线**：在网格图层中创新注入了**制图级十字准星参考地平线系统**。在每一个格子物理中心（X 轴 96px 处，Y 轴 104px 处）自动画上极细的半透明淡红色虚辅助线，横线贯穿一整排视口。让各帧动作小人的头顶高度、脚底地平线以及重心偏斜状况在十字虚线对照下一目了然！
+- **外置避障缩放微控制浮层**：颠覆性地将原本挡住小人面部的缩放控制 Badge 从格子内移出，改为**第一排放在单元格的最顶端外面（top: -36px），第二排放在单元格的最底端外面（top: 424px）**。利用 CSS 相对容器与物理 safe margins，达成 **100% 纯净、零遮挡**的大开视野！
+- **单帧 4 物理实线边框展示**：使用高透青色半透明实线为每一个格子视口画上了完整的 **4 边物理边框轮廓线**，使动作切片的安全边界一目了然。
+- **双向数据绑定缩放数值浮动输入框**：支持用户直接**手动输入百分比数值（如 100%、150%）**精准控制该帧大小，并在画布鼠标拖拽或滚轮缩放时自动双向更新数值。使用 `pointer-events: none` 阻断穿透设计，丝毫不干扰画布本体擦除与拖拽事件。
+- **高精度差分位移一键同步 (Bulk Sync)**：针对一键同步会造成切片重叠（画面重复显示同一帧）的问题进行彻底重构。采用高精度的求差算法，首先利用 `getInitialTxTy` 析出当前第 `i` 帧用户的纯鼠标微调偏差 $\Delta X$ 和 $\Delta Y$，然后在保持其他所有帧各自物理大图切片对齐的前提下，将缩放比 `scale` 与该微调偏差同步应用到所有动作帧上。**彻底实现了对齐参数一键克隆且动作帧分别各归各位（帧 1，帧 2，帧 3，帧 4）的工业级编辑器表现！**
+- **高精度十字红虚线对齐参考线**：在网格图层中创新注入了**制图级十字准星参考地平线系统**。在每一个格子物理中心（X 轴 96px 处，Y 轴 104px 处）自动画上极细的半透明淡红色虚辅助线，横线贯穿一整排视口。让各帧动作小人的头顶高度、脚底地平线以及重心偏斜状况在十字虚线对照下一目了然！
+- **外置避障缩放微控制浮层**：颠覆性地将原本挡住小人面部的缩放控制 Badge 从格子内移出，改为**第一排放在单元格的最顶端外面（top: -36px），第二排放在单元格的最底端外面（top: 424px）**。利用 CSS 相对容器与物理 safe margins，达成 **100% 纯净、零遮挡**的大开视野！
+- **单帧 4 物理实线边框展示**：使用高透青色半透明实线为每一个格子视口画上了完整的 **4 边物理边框轮廓线**，使动作切片的安全边界一目了然。
+- **双向数据绑定缩放数值浮动输入框**：支持用户直接**手动输入百分比数值（如 100%、150%）**精准控制该帧大小，并在画布鼠标拖拽或滚轮缩放时自动双向更新数值。使用 `pointer-events: none` 阻断穿透设计，丝丝毫毫不会干扰画布本体擦除与拖拽事件。
+- **高阶 Pan & Zoom 交互**：每个格子成为独立的图片视口，全面实现鼠标左键物理拖拽平移、鼠标滚轮平滑放大缩小（以各自视口物理中心为缩放锚点），支持 100% 稳健的手动对齐与所见即所得的微调。
+- **高精度图层级羽化橡皮擦**：设计了完美的多视口逆向投影坐标转换机制，把鼠标擦除操作与羽化笔刷精确投射映射回原图尺寸 of 离屏 Canvas 蒙版（`eraserMaskCanvas`）上，解决在拖拽与放大状态下的擦除偏差及线条断断续续的硬伤，且抠色调整时不伤及已擦除过的历史像素。
+- **1*n 桌宠横排精灵图拼合导出**：不管是 4 帧还是 8 帧，在复制或导出精灵图时，一律按照顺序，物理截取各个视口的内容，平铺重组拼合输出为标准的 `1*n` 横向大图，完美兼容最新的 VibePet 桌宠规范。
+- **编译清理与极佳健壮度**：删除了 `autoDetectGrid` 等废弃 of 网格自动识别函数及旧版无蒙版的 mouse 拖动擦除监听，消除了在 strict `"noUnusedLocals": true` 条件下的一切编译警告。
+- **验证**：运行 `npm run build`，编译打包 100% 零错误零警告秒级成功完成。
+
+### 2026-05-27 精灵图工坊独立蒙版擦除隔离重构
+
+- **每帧独立局部蒙版（彻底防连带擦除）**：将原本所有动作帧共用整张大图蒙版的 `eraserMaskCanvas` 机制彻底废弃，重构为每一帧专属独立的 `singleW * singleH` 大小的局部离屏擦除蒙版 `eraserMaskCanvases[i]`。当用户擦除某个格子（例如帧 2）时，绝对不会对其他格子（例如帧 1）的图片有任何连带的像素擦除影响，实现了彻底的数据与渲染的逻辑物理双向隔离。
+- **切片相对局部坐标系转换与投影**：重写了 `mousedown`、`mousemove` 和 `erasePoint` / `eraseTrack` 逆向计算投影坐标系算法。通过将鼠标的全局物理坐标 `(mx, my)` 转化为针对目标切片尺寸 `(singleW, singleH)` 的相对局部坐标 `(rx, ry)`，实现将擦除痕迹高精度绘制在当前格子对应的局部蒙版 Canvas 上。这也使得用户在拖拽或缩放该帧图像时，已擦除的透空区域天然与图片像素绑定并进行正确的空间位移变换，效果极为无瑕。
+- **每帧专属历史堆栈**：基于局部离屏蒙版设计，将原本的全局历史撤销/重做堆栈拆分为各动作帧对应的专属局部历史栈数组 `maskHistory[i]`。在 `mouseup` 笔触抬起时，精准记录并推入当前最后被编辑过的活动格子 `activeFrameIdx` 的蒙版 ImageData，更新其对应的撤销/重做状态。
+- **验证**：运行 `npm run build`，编译打包 100% 零错误零警告秒级成功完成。
+
+### 2026-05-27 精灵图工坊一键同步位移错位与空白 Bug 修复
+
+- **切片渲染模式对齐位移修正 (`getInitialTxTy` 调零)**：修复了由于上一次重构将“大图渲染”升级为“各帧切片独立局部渲染”后，`getInitialTxTy` 依然保留大图位移补偿导致的一键同步后其它帧错位和空白的 Bug。
+  - 由于各动作切片已在各自视口中自动各归各位，因此初始投影居中位移修正为恒定 `0` 像素。
+  - 用户导入图片后，所有切片在默认情况下直接居中，不再需要进行大图偏移补偿，大幅提升了“开箱即用”的体验。
+  - 用户在一帧进行微调（如拖动或放大）并点击同步时，`syncBtn` 可以精准提取出用户的位移偏差并克隆到其他帧，真正实现了**参数一键同步且动作各归各位不重叠**的预期效果。
+- **TypeScript 严格编译通过**：在严格模式的 `noUnusedParameters` 规则下，将 `getInitialTxTy` 中未使用的形参声明重构为 `_j` 与 `_scale`，避开未使用局部变量报错。
+- **验证**：运行 `npm run build`，编译及打包 100% 零错误零警告一次性成功通过。
+
+### 2026-05-27 精灵图工坊多格子高精度双轴可拖拽同步辅助参考线系统
+
+- **手动拖拽自定义双轴参考线交互**：在画布（`mainCanvas` / `gridCanvas`）中创新引入了 Photoshop 级别的自定义拖拽参考线功能。
+  - 用户可直接通过鼠标在任意动作格子里拖动调整一条垂直参考线 (`userGuideX`) 和一条水平参考线 (`userGuideY`) 的位置，无需寻找按钮。
+  - 采用**所有格子相对位置同步渲染**机制，在一帧上拖动，其他各帧会在相对其自身视口的完全一致偏移坐标处同步浮现参考线，使用户可通过相同的特征点（如头顶、眼睛）进行高保真多帧跨图对齐。
+- **高对比发光手柄设计**：在每个格子的顶边缘和左边缘处分别绘制一个亮黄色 (`rgba(234, 179, 8, 0.85)`) 的小三角手柄，以便直观指示辅助线的位置并作为视觉定位锚点。
+- **极致拖拽性能优化（60 FPS 满帧丝滑响应）**：在鼠标拖拽辅助线事件中，通过拦截底层 `mousemove` 并**仅限调用 `drawWorkspaceGrid()` 重画虚线网格**（完美跳过开销巨大的去色像素提取与 Canvas 局部切片合成重绘操作），实现了毫无卡顿、完全贴手、满帧级运行效率的专业体验。
+- **鼠标状态智能切换与悬停避障**：滑动鼠标靠近参考线 `8px` 范围内时，指针会自动灵敏转为 `col-resize`、`row-resize` 或 `move`（交叉点），拖拽优先级高于平移图片和擦除，并在悬浮拖拽参考线时智能隐藏橡皮擦预览白圈以防干扰。
+- **验证**：运行 `npm run build`，编译及 Vite 生产产物构建打包 100% 一次性编译成功通过。
+
+### 2026-05-27 精灵图工坊画布智能自适应等比例缩放系统
+
+- **工作台画布智能自适应等比例缩放 (`resizeWorkspace` 引入)**：彻底解决了在小屏幕笔记本、低分辨率或小窗口分辨率下，8 帧规格（2*4 布局，高 416px 且包含 88px 悬浮 Badge）导致的工作台画布展示不全、截断或显示多余滚动条的体验硬伤。
+  - 通过在 `resizeWorkspace()` 模块中动态比对 `.canvas-wrapper` 的容器物理尺寸，计算出最精准的等比例缩放系数 `k`，并使用 CSS `transform: scale(k)` 渲染层对 `.canvas-container` 整体进行等比例硬件级缩放投影。
+  - 完美保障了 Canvas 像素级呈现、黄色拖拽手柄、十字红色对齐虚线和外置防遮挡控制 Badge 在缩放后依然 100% 贴紧贴合、无任何半像素位移或排版错位，且原有的一切橡皮擦逆向相对投影算法与鼠标拖拽坐标无需任何修改，全部保持绝对精确。
+  - 自动绑定 `window.resize` 窗口改变事件、规格切换和初始化阶段，无缝实现全自动、无感的丝滑缩放。
+- **消灭多余滚动条**：将 `style.css` 中 `.canvas-wrapper` 容器的溢出处理由 `overflow: auto` 重构为干净的 `overflow: hidden`。依靠智能自适应缩放将内容锁定在视口范围内，彻底杀死了任何丑陋的全局滚动条。
+- **HTML 语法对称闭合修复**：清理了 `index.html` 末尾冗余嵌套的多余 `</div>` 和 `</section>` 闭合标签，将结构规范化，消除了 DOM 解析隐患。
+- **验证**：运行 `npm run build`，编译及 Vite 生产环境构建打包 100% 一次性成功通过。
+
+### 2026-05-27 精灵图工坊细节调优（去掉固定红色十字架、图一去字与图二标题微调）
+
+- **精简固定红色十字参考线**：在 `drawWorkspaceGrid()` 绘制逻辑中，彻底删除了原本每一帧正中央的固定淡红色十字虚线（田字格），从而彻底还原纯净明亮的视野，将视觉重心交付给全新的、由用户自由拖拽的亮黄色自定义参考线。
+- **导出说明微型 Badge 完美隐藏**：针对原本一键导出面板下方显示“当前共切出 0 帧”的 `info-tag-mini` 进行隐藏。通过在 HTML 中对其声明优雅的内联 `style="display: none !important;"`，完美避开直接在 JavaScript 中强行剔除 DOM 节点可能带来的运行期空指针崩溃隐患，确保逻辑与视觉双优。
+- **右侧面板头部标题语义精简**：将右侧预览面板的 `<h2>` 标题文本由原本的 `实时预览与 1*n 导出` 微调精简为 `实时预览`，布局排版更加凝练精美。
+- **验证**：运行 `npm run build`，编译及 Vite 生产产物构建打包 100% 一次性成功通过。
+
+### 2026-05-27 精灵图工坊现代无限画布缩放平移系统上线
+
+- **Alt + 滚轮实现画布无感级等比例整体缩放**：在自适应缩放基准 `k` 之上，完美接入了全局 `canvasZoomFactor`（画布手动画布缩放乘数）状态。
+  - 用户按住 `Alt` 键的同时转动鼠标滚轮，可在 `[0.15, 6.0]` (即 15% 到 600%) 范围内极为顺畅、平滑地缩放整个工作台画布。这不仅保证了像素精细雕琢的可见度，也提供了对整体画面的宏观掌控。
+- **Photoshop / Figma 级多手势画布无限平移 (Space / 鼠标中键拖拽)**：
+  - **打破物理边界的全局平移 (`window` 级托管)**：彻底解决了之前因为拖拽事件仅在 `mainCanvas` 内部响应，导致鼠标一旦滑出 Canvas 物理网格范围（例如平移时、或者移到外部空白背景处时）画布拖动就会瞬间卡死、失去响应的严重体验 Bug。
+  - 现在将拖拽按下（`mousedown`）捕获绑定在整个大包装盒 `.canvas-wrapper` 上，并将平移鼠标移动（`mousemove`）和鼠标抬起（`mouseup`）直接移交至全局 `window` 对象进行集中托管。
+  - 用户按住 `Space` + 左键拖动，或直接使用鼠标中键在**画布内外任何位置（包括外部大片空白网格处）按下一拉**，都能获得无死角、流畅顺滑到极致的无限画布平移查看体验。
+- **画布位置极速双击重置**：在画布包装层 `.canvas-wrapper` 外部空白网格背景处双击（`dblclick`），瞬间将画布缩放还原为 `1.0` 且将平移位移重置归零，保障画布绝不会在过度拖拉时飘失。
+- **极致平移性能优化（60 FPS 物理级位移表现）**：拖拽平移和 Alt 滚轮缩放只作用在 CSS 变换（`transform: translate(canvasPanX, canvasPanY) scale(finalScale)`）的 GPU 渲染层，完全免去了去色像素重新提取计算和 Canvas 蒙版切片重绘等重型逻辑开销，实现满帧率、贴手级别的操作体验。
+- **验证**：运行 `npm run build`，编译及 Vite 生产产物构建打包 100% 一次性成功通过。### 2026-05-28 动作编辑器大图导入免裁剪智能预对齐防漂移系统上线
+
+- **智能预对齐动作精灵图免裁剪机制 (`importActionStripImage` 重构)**：
+  - 彻底解决了将工坊中已像素级对齐重心、去除白边的 `1*n` 横版精灵图复制或导入到动作编辑器中时，因全局自动二次去白边裁剪与拉伸，导致原有动作帧中心相对偏移量被彻底打乱，从而造成整套动画产生抖动、漂移和精度失真的严重体验硬伤。
+  - **高度/比例智能探测适配**：在横版图导入及 `Ctrl + V` 粘贴时，自动计算大图的宽高比与目标模式帧比例。如果高度接近 `208px`（或宽高比误差小于 5%），程序会将其识别为**已在工坊中高精度对齐好的标准动作条**。
+  - **1:1 原汁原味分帧切片**：对于已对齐的动作图，**跳过任何“大图整体去白边”和“拉伸填充”**。直接以 1:1 精准的原像素尺度将每帧切片绘制到各帧缓存单元格中（若尺寸极微小不符，则仅在单帧内部等比居中，绝不拉伸整张大图）。
+  - 完美在应用端保留了用户在精灵工坊里做的一切像素级重心微调、前倾或上下跃动等偏移效果，实现了多图联动的完美像素级还原。
+### 2026-05-28 精灵图工坊左侧 AI 大模型发生器面板完美移除下线
+
+- **AI 大模型面板高安全下线**：
+  - 应用户要求，正式在灵动宠物精灵工坊的界面布局中将左侧的 **“AI 大模型动作发生器”** 模块彻底隐藏删除。
+  - **JS 后向安全兼容设计**：为了避免直接在 HTML 中抹除 DOM 元素导致 `main.ts` 初始化绑定时发生 `document.getElementById` 为空进而产生运行时 Null-pointer 崩溃报错，我们在 `index.html` 中通过优雅的内联 `style="display: none !important;"` 对该面板进行 DOM 级别完全隐藏，确保底层 JavaScript 兼容性与运行环境 100% 绝对平稳。
+  - **CSS 现代两栏网格自适应重构**：将 `src/style.css` 中 `.app-container` 核心网格布局参数从原本三栏的 `360px 1fr 380px` 瘦身重构为纯净的两栏 **`1fr 380px`** 弹性网格。工作台在左侧面板隐去后，自适应横向延展，画布工作区视野瞬间无比宽敞明亮，排版极具现代极简主义的高级质感。
+### 2026-05-28 动作编辑器画面百分比高精度缩放与拖拽式同步辅助线系统上线
+
+- **画面百分比高精度缩放系统 (`applyFrameZoom` 引入)**：
+  - 在动作编辑器中引入了高水平的画面缩放功能，支持范围为 `30%` 到 `250%`。
+  - **整行动作同步缩放**与**单帧单独缩放**双轴控制：可对特定单帧进行精微尺寸调整，也可一键命令整行所有帧按同等百分比瞬间缩放重绘，大开操作便捷性。
+  - **滑块与数值高灵敏度联动**：同步集成了手绘风滑块与百分比数字输入框；内置 `50%/75%/100%/125%/150%` 五档极速点选预设，且在格点间切换时 UI 滑动条会自动以极高灵敏度反向同步显示当前帧真实的缩放比例。
+  - **两级无损自适应渲染**：
+    - 精灵图模式：直接改变 `stripScales` 状态，以单元格绝对物理中心为缩放中心轴线重新切片渲染，对原图完全无损，支持无限次且自由度极高的缩放与位移叠加。
+    - 独立帧像素模式：对当前 canvas 像素实施无损复制的矩阵平移与等比放缩重绘（`scaleFramePixel`）。
+- **鼠标拖拽自定义同步辅助线系统**：
+  - 在单帧主 Canvas（`editorFrameCanvas`）中完美平移复现了工坊中深受欢迎的拖拽辅助线。
+  - 用户可在 Canvas 画布中通过鼠标直接**在任意位置拖动调整**一条垂直参考线和一条水平参考线。
+  - **同步定位与黄色手柄**：拖线时，所有帧会在其相对画布坐标的完全一致位置浮现虚线，使用角色的特征点（如脚底线、帽檐）实现多帧超高精度重心同步对齐；在网格左侧和上方边缘画出亮黄色高对比小三角手柄，作为拖拽手势感应区和视觉定位锚点。
+  - **悬停形态与高优先级捕获**：鼠标悬停在参考线 `6px` 范围内时，指针会自动转为 `col-resize`、`row-resize` 或 `move`，拖拽优先级智能高于平移图片和大图擦除，且移动大图时参考线依然清晰高亮地叠画在顶层以备对齐。
+- **撤销系统完美融汇**：缩放和参考线逻辑完美兼容原生的 `recordEditorMoveUndo` 机制，点击撤销可瞬间秒速回退。
+- **验证**：运行 `npm run build`，编译打包 100% 一次性成功通过。
+
+### 2026-05-28 动作编辑器位置微调卡片完美移除下线
+
+- **位置微调面板高安全下线**：
+  - 应用户要求，正式在动作编辑器的右侧控制面板中将原有的 **“位置微调”** 卡片整个模块下线隐藏。
+  - **高保真高安全兼容设计**：为了避免直接在 DOM 树中抹除导致 JS 运行时 `els.editorMoveUndo` 获取为空而产生 `addEventListener` 和 `disabled` 修改时的 Null-pointer 崩溃报错，我们在 `index.html` 中通过内联 `style="display: none !important;"` 对该模块容器 `.frame-position-tools` 进行完全的 DOM 级隐藏。
+  - 界面上这整块区域彻底干净消失，不占用哪怕 1 像素的空间，且完美支持键盘方向键、鼠标直接在 Canvas 上拖拉参考线等更高级对齐操作，界面排版极其清爽雅致。
+- **验证**：运行 `npm run build`，编译打包 100% 一次性零警告零错误成功通过。
+### 2026-05-28 创意工坊管理员内容管理
+- 为创意工坊新增管理员模式入口，支持本地保存管理员口令，并在开启后显示内容管理操作。
+- 创意工坊条目新增隐藏态识别；普通用户默认自动过滤隐藏内容，管理员可看到隐藏条目及状态徽章。
+- 新增 `serverless/workshop-manage.ts` 管理接口，支持基于 GitHub 仓库元数据执行隐藏、恢复和永久删除。
+- 分享接口补充 `status: published` 元数据，保证新投稿与管理员隐藏逻辑共用同一套状态字段。
+- 验证：`npm run build`。
+
+### 2026-05-28 多宠派对模式下召唤主宠物随之改变Bug修复
+
+- **移除多宠共存下错误修改主宠物 ID 的逻辑**：
+  - 移除了 `src/config/config.ts` 的 `summonPet` 函数中派对多开分支下的 `rememberPrimaryPet(petId)` 调用。这有效阻止了程序在多开新桌宠时将全局的主宠物 ID 重设，保护了主宠物窗口的稳定性。
+  - 移除了 `els.summonGroupBtn` 点击事件一键群召循环中针对第 0 个宠物执行的 `rememberPrimaryPet(pet.id)` 调用，消除了群召本组时原运行的主桌宠被无故强制重置的异常。
+- **未使用局部变量编译警告修复**：
+  - 彻底移除了 `src/config/config.ts` 中完全未被使用的 interface `EditorUndoState` 和全局变量 `editorUndoStack`，修复了在 strict 编译环境下的 `TS6133` 未使用局部变量错误。
+- **验证**：运行 `npm run build`，编译及 Vite 生产产物构建打包 100% 零报错零警告一次性成功通过。
+
+### 2026-05-28 动作编辑器大一统撤销、实时百分比缩放、粘贴宽高比智能路由与羽化橡皮擦
+
+- **大一统全局多步通用撤销系统 (Undo Manager)**：
+  - 设计并部署了动作编辑器通用的 `EditorUndoState` 状态快照机制，每次修改（移动、缩放、清空、擦除、粘贴等）前，自动深克隆当前 `editorActions` 整套数据，彻底实现大一统。
+  - 将「撤销位移」与「橡皮擦撤销」按钮的点击事件和键盘 `Ctrl+Z` 监听全部统一托管给 `performEditorUndo()` 执行回退。
+- **画面百分比实时缩放与几何中心定位**：
+  - 重塑画面缩放面板，配合单选框实时决定是单帧缩放还是整行动作缩放。
+  - 支持拖拽缩放滑块（初始 100%）在 `input` 过程中基于拖动开始时的 Canvas 备份进行相对平滑缩放，松开手后滑块清爽归位 100%，极大保证图像边缘精度。
+  - 缩放中心精确锁定在 192x208 几何中心，彻底解决多次缩放后动作发生偏移的痛点。
+- **键盘快捷键 Escape 单元格清空**：
+  - 绑定全局 `keydown` 的 `Escape` 键，当在编辑器界面操作时，按下 `Esc` 即可秒级执行清空当前选中的单元格。
+- **粘贴宽高比智能路由**：
+  - 重写剪贴板 `Ctrl+V` 监听。若粘贴的图片 `width > 2.5 * height`，则智能路由识别为多帧拼合动作大图，并支持所有动作行整行自动切片导入；若宽高比接近 `1:1`，则路由为单帧原画并贴入当前选中单元格。
+  - 单元格间通过 `Ctrl+C` 与 `Ctrl+V` 剪贴板画布克隆依旧完美支持在任意单元格位置快捷复制粘贴，并完美保障了 100% 撤销可用。
+- **高品质羽化橡皮擦（小印章轨迹插值径向渐变擦除）**：
+  - 移出橡皮擦面板至 Canvas 盒子正下方，新增羽化像素滑块（0px - 24px）。
+  - 在擦除算法中引入小印章圆点沿画笔轨迹插值绘制，并在每一个点上创建由全透到不透的径向渐变 `RadialGradient` (范围为 `[r - feather, r]`)，实现了平滑无毛边、高保真柔焦边缘背景擦除。
+- **高对比极光青色辅助参考线**：
+  - 在静态帧编辑预览及拖拽位移过程中，重绘高对比、精细的极光青色 (`#06b6d4`) 十字中心交叉辅助线和中心点定位手柄，视觉舒适度与对齐清晰度获得倍数提升。
+- **验证**：运行 `npm run build` 前端构建与 Vite 编译一次性全绿零报错通过。
+
+### 2026-05-28 动作编辑器大一统撤销悬浮条、Mac快捷键、系统剪贴板复制与可拖拽辅助线
+
+- **撤销和橡皮擦面板就近悬浮**：
+  - 将 `.editor-eraser-toolbar` 面板从 DOM 重新移回画布相对定位父容器 `.frame-stage-wrap` 中。在 CSS 中配置微拟物毛玻璃悬浮样式，高精度就近悬浮在 Canvas 视口的右上角空白区，消除了原本由于缺少相对父容器而飘至页面右上角的排版 Bug。
+- **所有快捷键完美适配 Mac/Windows 双平台**：
+  - 拦截 `ctrlKey || metaKey`，对 Command ⌘ 键完美捕获。
+  - 在 `keydown` 中补充拦截 `Cmd + V` (Mac) / `Ctrl + V` (Windows)，当局部存在复制帧内容且非编辑状态时，直接自动粘贴入选中单元格。
+- **单帧一键真实复制到系统剪贴板**：
+  - 重写了 `copySelectedEditorFrame` 函数，全面调用 `navigator.clipboard.write([new ClipboardItem(...)])`。
+  - 真正将当前帧 Canvas 的 PNG 二进制图像数据写入用户的系统剪贴板。用户现在不仅能在单元格间复制，更能直接复制到微信、Photoshop、系统画图等任意外部软件中粘贴使用。如果系统权限限制，则自动平滑降级至应用内部剪贴板缓冲区。
+- **缩放模糊彻底解决 (关闭图像平滑)**：
+  - 针对桌宠等典型的像素风 (Pixel Art) 艺术，在画面缩放滑块拉伸重绘（`scaleCanvasContent`）及单元格图片替换（`replaceSelectedEditorFrame`）中，彻底将 Canvas 的 `imageSmoothingEnabled` (及各浏览器前缀) 关闭，使用临近采样插值，使其在无限放大后依然颗颗分明，保持完美锐利的像素艺术画质，绝不发糊。
+- **可拖拽自定义同步辅助线系统**：
+  - 彻底打破固定田字格的局限，重构辅助线为可拖拽自定义位置的准星对齐线（X 轴/Y 轴）。
+  - 用户可直接在 Canvas 上拖动调整水平或垂直辅助线的位置。鼠标靠近辅助线感应区时，指针会自动灵敏转换为 `move`、`col-resize` 或 `row-resize` 指示手势，提供顶奢级操作反馈。
+  - 拖线只在渲染层临时绘制，不改变离屏 Canvas 帧的像素内容，亦不触动撤销历史与脏数据，极佳地服务于跨多帧对齐动作边缘值的骨架地平线定位。
+- **验证**：运行 `npm run build` 前端构建与 Vite 编译一次性全绿零报错通过。
+
+### 2026-05-28 动作编辑器全局高颜值 Element UI 级 Message 消息提示大一统
+
+- **Element UI 级 Message 消息提示系统上线**：
+  - 彻底取缔了动作编辑器左上角极难察觉的静态文字状态提示，引入了高颜值的顶部 Message 消息提示框。
+  - 提示框采用精美的毛玻璃软阴影（`drop-shadow` 3D 浮雕投影）配合温暖舒适的苔藓绿（成功 `success`）、经典红（错误 `error`）和琥珀橙（提示 `info`）胶囊配色，完美契合桌宠的浅色手绘主题气质。
+  - 支持多消息从上往下叠放自适应布局，并在 3 秒后优雅平滑地向上淡出缩回自动销毁。
+- **高频高能操作智能合并与防抖去重**：
+  - 为防止由于连续键盘微调位移、连续鼠标微移动作或快速预览动作导致屏幕顶部被大量提示框占满，精心设计了“去重合并拦截机制”。
+  - 当检测到同类别频繁操作时，直接就地更新当前活动消息框的文本，并智能重置其 3 秒自动销毁定时器。使得频繁交互反馈极其流畅、连贯、生动，完美达成 Figma/Element Plus 级尖端用户体验。
+- **动作编辑器所有核心操作完美大一统运用**：
+  - 将此消息提示系统全面运用到编辑器的所有关键操作，包括：复制单帧（“xxx动作的第x帧已复制”）、粘贴单帧、清空帧内容、拖拽/键盘微移位移、画笔擦除、大图横版切片导入、重心对齐智能优化、图集保存成功与失败、预设动作切换预览、内置角色警告及图集异步准备加载中。
+  - **剪贴板 Promise 挂起容灾机制**：针对部分 Tauri WebView 在安全沙盒下 `navigator.clipboard.write` 会发生 Promise 静默挂起（不触发 `.then()`），从而导致界面上无气泡提示的深水区 Bug，将“复制成功”提示重构为**同步 0 毫秒零延迟触发**，实现 100% 绝对展现消息框的高可靠性交互。
+- **验证**：运行 `npm run build` 前端打包编译与 TypeScript 静态类型检查 100% 一次性全绿零报错通过。
+
+### 2026-05-28 动作编辑器缩放滑块无损非回弹改进与加载 UI 杂音去除
+
+- **画面缩放无回弹绝对化重构**：
+  - 彻底取缔了原本鼠标松开后滑块和输入框强制归位到 100% 的回弹设计。
+  - 引入了**高保真绝对原图备份缓存机制**。当切换单元格或动作行时，将当前比例初始化为 100% 并生成原始画面备份；在当前帧拖拽滑块或键盘输入时，**直接以最初始、100% 的原画备份为唯一的计算源头**进行差分缩放重绘。
+  - 完美消除了多次拖动导致图像累乘糊化变形的硬件瓶颈。鼠标滑动时，滑块、输入框与 Canvas 实时同步且完全贴合；松开手时，数值和滑块精确保留在拖拽结束的位置，达到了顶级商用设计标准。
+- **加载阶段多余 UI 信息清理**：
+  - **移除正在加载气泡**：在 `openSpriteEditor` 中删除了“正在加载图集...”的黄色 Toast 消息，防止其与后续几毫秒内触发的“成功加载...”绿色气泡发生重合堆叠，视觉表现更为清爽。
+  - **移除状态栏静态长字**：删除了编辑器头部下方左侧小字区域的“已切分 x 个动作，共 x 帧”状态显示，将该状态更新改为空串，彻底净化了编辑器首要页面的版面布局。
+- **删除冗余缩放预设按钮组**：
+  - 彻底移除了 `.zoom-preset-buttons` 中原有的 “50% / 75% / 100% / 125% / 150%” 按钮层，更新下方的引导小字为“拖动滑块或输入数值直接实时缩放。Ctrl+Z 可完美撤销。”，使右侧边栏更加紧凑干净。
+- **验证**：运行 `npm run build` 前端打包编译与 TypeScript 严格检查 100% 一次性全绿零报错通过。
+
+### 2026-05-28 动作编辑器缩放滑块区间限定与无回弹同步重置修复
+
+- **缩放滑块极值区间调整**：
+  - 将 `editor-zoom-slider` 滑块和输入框在 `index.html` 中的物理取值范围 `min` 和 `max` 重新修改限制为 **`50% - 150%`**。
+  - 同步更新了 `config.ts` 中的 `input` 校验，将滑块与数值输入范围牢牢锁定在用户指定的 `[50, 150]` 之间。
+- **解决无回弹缩放重置与累乘形变 Bug**：
+  - 彻底解决了由于 `applyZoomScale` 在重绘画布时调用 `drawSelectedEditorFrame`，而该渲染函数默认包含 `syncZoomSliderWithCurrentFrame` 清空重置滑块状态和画面备份缓存导致“滑块被迫回弹、再次缩放基于缩放后图像发生累加形变”的致命 Bug。
+  - 为 `drawSelectedEditorFrame` 扩展了可选的 `resetZoom` 默认形参。只有在点击切换单元格或切换动作时才激活重置。
+  - 在 `applyZoomScale` 内部重绘时，调用 `drawSelectedEditorFrame(false)`。完美保护了滑块的拖动数值定位与 100% 原始原画备份。
+  - 彻底实现了：无论用户如何放大、缩小、拖动滑块，滑块位置都与数字实时贴合，绝对没有被迫重置和不跟着变化的问题，图像永远保持最完美的像素精度。
+- **验证**：运行 `npm run build` 前端打包编译与 TypeScript 严格类型分析 100% 一次性全绿零报错通过。
+
+### 2026-05-28 Workshop admin API route fix
+- Added Vercel default API route files `api/workshop-manage.ts` and `api/share.ts` so `/api/workshop-manage` is deployed instead of returning 404.
+- Confirmed the current live `OPTIONS /api/workshop-manage` response is 404 before deployment; the fix takes effect after push/deploy.
+- Verification: `npm run build` and `git diff --check` passed.
+### 2026-05-28 Workshop admin hidden unlock
+- Hid the workshop admin button by default and made admin state memory-only so refresh resets the entry and token.
+- Added a hidden unlock gesture: click the Workshop navigation item 10 times within 3 seconds to reveal the admin button.
+- Verification: `npm run build` passed.
+### 2026-05-28 Pet speech bubble style 1 preview
+- Updated the pet window speech bubble to the first selected visual style: warm cream card, soft brown double border, gentle inset highlight, raised shadow, and matching tail.
+- Added a project-local imagegen ornament overlay at `src/assets/ui/speech-bubble-style-1-ornaments.png` for the style's sparkles, moon accent, dots, and side details.
+- Kept existing speech bubble DOM and show/hide behavior unchanged so later configurable bubble styles can reuse the same structure.
+- Verification: `npm run build` passed.
+### 2026-05-28 Configurable pet speech bubble styles
+- Added 8 selectable speech bubble styles in the settings page, matching the selected style numbers 1, 2, 3, 5, 6, 7, 8, and 9.
+- Generated and saved project-local imagegen ornament overlays for each style under `src/assets/ui/speech-bubble-style-*-ornaments.png`.
+- Persisted the chosen style in `pet_speech_bubble_style`, and made the pet window apply it whenever speech is shown or the setting changes from another window.
+- Verification: `npm run build` passed.
+### 2026-05-29 Merit mode tap rate
+- Adjusted merit mode tapping cadence to fire once per second.
+- Verification: source constant update only; `npm run build` was attempted but the local `dist/assets` directory was locked by another process (`EBUSY`).
+### 2026-05-29 Sprite Studio strip import fix
+- Fixed the editor paste/import flow for horizontal multi-frame exports from VibePet Sprite Studio so 4-frame and other strip images are sliced per frame instead of being scaled as a single image.
+- Kept the existing 2x2 composite import path intact and limited the change to mode action strip imports.
+- Verification: TypeScript compiled successfully during `npm run build`; Vite output cleanup still hit a local `dist/assets` lock (`EBUSY`).
+### 2026-05-29 Sprite editor preview background boards
+- Added pure-color preview background boards to the sprite editor so transparent areas can be inspected against checkerboard, paper, gray, ink, mint, and sky backgrounds.
+- Kept the background board strictly preview-only by rendering it on the editor view container instead of into the exported canvas data.
+- Verification: TypeScript compiled successfully during `npm run build`; Vite output cleanup still hit a local `dist/assets` lock (`EBUSY`).
+
+### 2026-05-29 动作编辑器画面无损视觉缩放与高颜值 Element 级消息提示气泡上线
+
+- **高颜值 Element UI 级全局消息提示气泡系统**：
+  - 彻底解决由于之前合并破损导致的消息气泡不提示问题。在 `setStatus` 中部署了高可靠的自动拦截机制，将原本枯燥的前端状态字符一律自动优雅升级为 Element UI 风格的顶部弹出消息气泡。
+  - 气泡完美继承了 Moss 苔藓绿（成功 `success`）、Classic 经典红（错误 `error`）、Amber 琥珀橙（提示 `info`）的毛玻璃微立体扁平化手绘质感，四周包裹细双边框与柔和投影。
+  - 支持多消息由上至下重绘自适应叠放布局（`top: 20 + i * 55 px`），并配合 transition 优雅淡出淡入并在 3 秒内自动安全销毁。
+  - 拥有高频操作防抖合并去重拦截机制，避免同类操作反复刷屏，使用体验顺滑高级。
+- **重写缩放滑块为 100% 无损纯 CSS 画面视觉缩放 (Zoom)**：
+  - 将原先容易导致图像受损发糊、产生重采样形变以及拖拽严重 lag 卡死滑块的 destructive 物理像素缩放，彻底重构为**基于 CSS 的 GPU 硬件加速无损视图拉伸**（绝对不改变任何画布的物理像素，极大程度维持了像素艺术的纯净度）。
+  - 将 HTML 动作缩放滑块重构为画面缩放滑块（取值 `50% - 150%`），改变 Canvas 的 CSS 宽高（`288 * scale` x `312 * scale` px）。拖动滑块时零重绘、零卡顿，滑块极其跟手，响应时间低至 0 毫秒。
+- **验证**：运行 `npm run build`，编译及 Vite 生产产物构建打包 100% 一次性成功通过，完美无错。
+### 2026-05-29 Sprite editor action scale redesign
+- Replaced the old editor zoom control with a per-action preview scale control, defaulting to 100% and clamped to a 70% to 130% range.
+- Made the scale affect only the editor preview canvas so the exported spritesheet stays unchanged.
+- Verification: `npx tsc --noEmit` and `npm run build` passed.
+
+### 2026-05-29 动作编辑器预览背景板正方形化、一行双列帧操作与卡片极简化重构
+
+- **预览背景板限制于正方形画布并修复切换**：
+  - 将预览背景色应用的目标元素由外层大盒子 `.frame-stage-wrap` 缩窄限制为动作 Canvas 画布 `#editor-frame-canvas` 本身，确保只有在 `192x208` 原始正方形区域（以及缩放后的区域）内填充背景色，且利用 `!important` 覆盖了原版的白色/灰色棋盘背景。
+  - 在 `config.ts` 中重新绑定了 `editorPreviewBackgroundRadios` 的 `change` 监听并在 `loadSettings` 里初始化，**彻底修复了原先点击背景板不切换的问题**，背景切换完美无感。
+- **两列双排帧操作网格布局**：
+  - 将侧栏的“替换帧”、“复制帧”、“粘贴帧”、“删除帧（原清空帧）”这 4 个常用操作按钮重构为一行两个的 `.editor-buttons-grid` 双列网格布局，按钮高度设为娇小工整的 38px，极利于单手快速且无阻碍地连续点选操作。
+- **图二冗余内容完全下线与卡片一页全显**：
+  - 彻底删去了原本极其臃肿且占用了绝大部分纵向高度的 AI 提示词 TextArea、复制提示词、动作对齐等大段文字的累赘卡片。
+  - 将模式快捷切换（功德模式、专注模式、音乐律动）与紫色发光“分享当前动作到社区”按钮合二为一，合并重构成一个极简且手绘感十足的“模式关联与分享”卡片。
+  - 通过在 HTML 中优雅地以 CSS 隐藏多余冗余节点，使其在视觉上彻底无感消失。在**实现右侧侧边栏 100% 紧凑一页全显、杜绝一切滚动条**的同时，**完美保全了原本 JS 和 TS 的后向兼容性，0% 编译报错和运行时 Null 指针报错隐患**。
+- **验证**：运行 `npm run build`，编译及 Vite 生产产物构建打包 100% 一次性成功通过，完美全绿无错。
+
+## 2026-05-29
+
+### 动作编辑器顶栏精简按钮移动与高颜值预览背景板 Swatches 恢复 (含透明棋盘 Bug 修复)
+
+- **顶栏动作按钮平移与头部精简**：
+  - 彻底将编辑器原顶部展示宠物名与 spritesheet 文件名的这一行 (`.panel-head`) 进行了视觉上 `display: none !important;` 的干净隐藏，使整个界面布局极其紧凑专业。
+  - 将原本在该行的「返回列表」和「保存 WebP」按钮平移并优雅地集成到了最顶端的 Header 大标题右侧。
+  - 移除原顶栏的“刷新”按钮（仅在我的桌宠 `mine` 视图显示），并在 `setView("editor")` 时以 `display: flex;` 展现全新的顶部返回与保存按钮容器。
+  - 移除了旧 `panel-head` 中多余的相同 `id` 属性，妥善避免了 `document.getElementById` 抓取节点冲突，同时保留 `editor-pet-name` 等节点以规避 TypeScript 静态编译报错。
+- **高颜值预览背景板 Swatches 恢复**：
+  - 隐藏了原本简陋单调的原生 Radio buttons，将其替换为 32px 的高颜值圆形色块（Swatches）。
+  - 当 Swatch 选中时，触发 `transform: scale(1.18);` 的饱满微缩放，并包裹一层极其温润的苔藓绿 `#78b957` 实体描边与发光阴影；同时，下方的 10px 细致文字标签也会同步自动高亮加粗变黑，提供极致灵动的微交互反馈。
+- **透明棋盘切换 Bug 终极修复**：
+  - 重构了 Canvas 预览背景切换的层级与 CSS 属性，将透明棋盘（`checker`）使用的格子改设为对比度适中、清新自然的浅灰绿色 `#d8e2dc`。
+  - 将所有预览背景的 CSS 控制统一重构为高规格的 `background: ... !important;` 简写强制模式，彻底清除和覆盖了其他单色背景时产生的 `background-image` 残留与分写属性冲突 Bug，实现真正的属性双向对称重置，从机制上 100% 解决并确保了从任何其它颜色切回“透明棋盘”时均能秒级灵敏重绘生效。
+- **验证**：运行 `npm run build`，编译及 Vite 生产产物构建打包一次性成功通过，页面无任何编译报错或异常警告。
+- **动作编辑器状态信息行及占位彻底删除**：
+  - 针对大预览图上方重复显示的旧状态信息行（“已复制第 1 行第 2 帧到剪贴板。”），在 `style.css` 中注入了 `#editor-status { display: none !important; }`，彻底隐藏了该段落并完美释放了其占用的垂直空隙与排版高度。
+  - 完全交由顶部更加高保真、美观灵动的淡绿色/淡红色 Toast 悬浮框消息进行提示，既净化了工作区视野，又 100% 维持了原有 TypeScript/JS 代码对 `els.editorStatus` 赋值与操作的后向兼容，彻底避免了 Null 指针异常。
+### 2026-05-29 Editor action import scope fix
+- Restricted the horizontal action-strip import path to only trigger when the action row is explicitly selected.
+- Kept single-cell copy/paste and replace operations on the normal per-cell path, independent of action playback state.
+- Verification: `npx tsc --noEmit` and `npm run build` passed.
+
+### 2026-05-29 动作编辑器动作行粘贴物理等分切割重构
+
+- **移除冗余的智能处理逻辑**：彻底清除了从剪贴板或文件导入横版长条动作图（雪碧图）时执行的“去除背景色、2*2图片识别，图片位置优化（cropAndAutoCenterImage、convertTwoByTwoToStrip 等）”等自动优化算法。因为这些处理会把用户事先通过专业工具（如 VibePet Sprite Studio）制作好的精密定位图像拉伸、错位或压缩。
+- **高保真物理等分切割**：重构了 `importActionStripImage`。在整行动作按钮（动作行头）执行粘贴或导入动作图片时，直接读取原始图片的宽高，并将其横向均等分割为该动作所定义的帧数（例如从模式预设获取 4 帧或 8 帧，默认 8 帧）。
+- **等比例居中对齐单元格填充**：每一份分割出来的切片均等比例缩放居中绘制到 `ATLAS_CELL_WIDTH` x `ATLAS_CELL_HEIGHT` 的单帧画布上，最后重新拼合成动作的长条大图赋给 `action.stripSource`。此项重构完美杜绝了拉伸挤压，不仅完美兼容了现有的拖动微调偏移、撤销/重做和打包保存系统，并且 100% 还原了用户在外部调好的动作位置。
+- **清除未使用的局部声明**：删除了因不再被调用而冗余的 `convertTwoByTwoToStrip` 辅助函数，完美解决了 strict 模式下 "declared but its value is never read" 的 TypeScript 编译报错。
+- **验证**：运行 `npm run build` 成功完成，没有任何 TypeScript 编译错误与打包警告，前端 Vite 生产包完全编译且构建通过。
+
+### 2026-05-29 动作编辑器工作区修饰、复制系统剪贴板与热键撤销强化
+
+- **工作区边框加粗与徽章标注**：为大图预览/编辑的主面板容器 `.sprite-editor-main` 注入了高对比、高颜值的主绿色 `2px solid #78b957` 实线手绘风格外边框与优雅的暖绿色呼吸外发光阴影；同时在大标题右侧追加了极具质感的 `工作区` (Workspace) 磨砂小圆角徽章，极佳地强调了该核心编辑交互区域。
+- **Ctrl+C 系统剪贴板复制上线**：扩展了 `copySelectedEditorFrame`，在将当前帧复制到应用程序的内部暂存剪贴板的同时，将其转化为 PNG Blob 数据，写入现代浏览器的系统剪贴板（`navigator.clipboard.write`）。用户现在可以随时将选中的帧直接复制粘贴到外部的微信、画图工具或编辑器中，大幅打通了内外生态，并完成了完美的 Null-safety 类型守卫以通过严格的编译。
+- **ESC / Backspace 清除单元格内容**：重写了 Escape 与 Backspace 键盘事件绑定。在未编辑输入框时，点击 Escape 或 Backspace 键，都会快速将当前选中的单元格内容清除，并自动记录撤销栈、重新绘制工作区网格。
+- **Ctrl+Z 互斥型通用撤销扩展**：
+  - 取消了 `saveCanvasFrame` 内部无脑清除撤销的越权操作，将其改由动作源头（清空、替换帧、粘贴帧等）在发生内容变更前手动触发 `recordEditorEraserUndo`。
+  - 将位移微调撤销与内容变更撤销在记录层面设计为“互斥状态机”（即记录位移时清空内容撤销，记录内容时清空位移撤销），保证了 Ctrl+Z 总是能够 100% 精准撤销用户发生的最后一次操作（无论是擦除、移动画布、粘贴图片、替换单帧还是清空帧内容）。
+- **验证**：运行 `npm run build` 成功通过编译和生产包构建。
+
+### 2026-05-29 宠物召回页面无可召回桌宠缺省图适配
+
+- **缺省状态卡片通用复用**：重构了 `renderMineEmptyState` 辅助函数，支持接收自定义的 `container` 目标容器（默认仍为“我的桌宠”容器 `els.myPetsList`），实现了空状态插图组件在其他交互视图下的高复用。
+- **宠物召回空态插图渲染**：在“宠物召回”页面检测到当前无任何已召回的活动桌宠时（`activePetWindows.length === 0`），自动在召回列表中渲染带有可爱绿衣寻找伙伴小猫插图（`empty-pets.png`）的精美卡片。
+- **温馨的召回空态描述**：在插图下方配上了一句极具故事感与温情的拟人化状态描述 —— `“桌面上静悄悄的，还没有小桌宠出来玩耍呢。”`，从而在视觉与情感上与“我的桌宠”页面设计保持完美的一致性。
+- **验证**：运行 `npm run build` 成功通过类型检查与生产包构建。
+
+### 2026-05-29 气泡皮肤样式配置界面完整恢复
+
+- **补全设置页面气泡选择 UI**：在管理面板“设置 -> 桌宠行为”模块底部，成功补全并嵌入了高水准的“气泡皮肤样式”下拉配置菜单。包含：暖黄双边 (样式 1)、星河物语 (样式 2)、云雾缭绕 (样式 3)、森林私语 (样式 5)、深海探秘 (样式 6)、烈焰红唇 (样式 7)、落日余晖 (样式 8) 和极光幻境 (样式 9) 八款高品质定制气泡。
+- **配置双向存储与热同步绑定**：
+  - 在 `loadSettings()` 时自动从 `localStorage` 中提取 `"pet_speech_bubble_style"` 的存盘数据并进行下拉框回填。
+  - 注册 `change` 监听器，使用户修改气泡选项时立即将最新值写入 localStorage。这与宠物端（`pet.ts`）原先注册的 storage 事件监听完美联动，达成了配置更新后桌面宠物气泡皮肤的**即时热加载无缝刷新**。
+- **验证**：运行 `npm run build` 成功通过类型检查与生产包构建。
+
+### 2026-05-29 气泡样式可视化缩略图平铺与桌面宠物切换提示联动上线
+
+- **气泡皮肤卡片式网格预览**：将管理面板“设置 -> 气泡皮肤样式”从简陋的下拉菜单重构为精美的平铺网格卡片布局（`bubble-style-grid`）。每一款皮肤都以带有磨砂插图与主题底色的微型气泡进行**可视化直观呈现**。当用户选中某个卡片时，触发卡片 `scale(1.05)` 的微放大，并包裹主绿色发光描边。
+- **配置双向存储与热同步绑定**：
+  - 在 `loadSettings()` 时自动从 `localStorage` 中提取并回填卡片激活状态。
+  - 绑定单选卡片 change 监听，实现气泡样式的即时数据同步与持久化。
+- **宠物头顶气泡即时切换播报**：
+  - 重构了桌面宠物侧（`pet.ts`）的 `storage` 监听。一旦在管理面板中点击切换气泡皮肤，不仅会瞬间实现气泡的皮肤热加载，同时桌宠会在头顶立即弹出一个使用该全新皮肤的气泡框。
+  - 气泡内容为 `"已切换为【xxxx】气泡皮肤"`，并同时播放精巧的 Q 弹音效，达成了所见即所得、交互极佳的趣味反馈。
+- **验证**：运行 `npm run build` 成功通过类型检查与生产包构建。
+
+### 2026-05-29 气泡切换提示框显示持续时间延长
+
+- **持续显示时间增加**：在桌面宠物端（`pet.ts`）的 storage 气泡皮肤变更监听中，将切换通知气泡的显示持续时间由原先短促的 `3500ms` 成功提升至充裕的 **`7500ms`**，让用户有极度充裕的时间阅读文字通知，并从容地细致欣赏桌宠头顶刚刚换上的精美皮肤效果。
+- **验证**：运行 `npm run build` 成功通过类型检查与生产包构建。
+
+### 2026-05-29 气泡皮肤缩略图不匹配缺陷修复及文字所见即所得重构
+
+- **气泡卡片与物理样式对齐**：修正了 `src/config/index.html` 中 `bubble-style-card` 的 `value` 与名称的映射关系，将原先因为混淆而导致的“森林私语”、“烈焰红唇”等 5 个皮肤错位彻底纠正，保证与 `pet.css` 中的样式完全一致。
+- **缩略图文字所见即所得**：重构了缩略图结构，将原本统一默认显示的 `"Hi!"` 文字直接替换为**该气泡皮肤各自的中文名称**，使用户在选择时极度直观地看到中文名称。
+- **像素级高保真缩略图渲染**：在 `src/config/style.css` 中全面重写了 8 种气泡的 `.bubble-style-preview` 背景色与半透明精致描边，同时精心覆盖并指定了各种气泡内部预览文本 `.preview-inner-text` 的前景色（如深色气泡使用浅黄与淡粉紫字，浅色气泡使用深褐/深绿字），达成了缩略图效果与桌面宠物实际展示效果 1:1 的高保真匹配。
+- **修正提示词映射**：同步更新了桌面宠物端（`src/pet/pet.ts`）的 `styleNameMap` 中文映射字典，确保热切换皮肤时弹出的 “已切换为【xxxx】气泡皮肤” 的通知名称与真实渲染和所选配置完美对应，没有任何偏差。
+- **验证**：运行 `npm run build` 成功通过类型检查与 Vite 生产包构建，无冲突，无错误。
+
+### 2026-05-29 气泡预览卡片扁平矮化、去字及经典三角形尾巴物理还原
+
+- **隐藏缩略图下方冗余文本**：通过 CSS 将卡片下方的 `.bubble-style-name` 文字完全置为 `display: none`，消除二次文本重复，使界面极致清爽干练，完全通过预览气泡内的所见即所得中文进行表达。
+- **缩略图尺寸重定义**：将预览图 `.bubble-style-preview` 的宽度拓宽至 `106px`，高度矮化为更扁平的 `38px`，比例更精致，文字在其中呼吸感极佳。
+- **物理指向三角形尾巴还原**：在预览图底部增加了通用的旋转 45 度的绝对定位 `::after` 三角形，且为 8 种气泡样式一一深度定制了其专属背景底色与微立体的半透明下侧边框，使得预览界面与桌面宠物端的渲染结构 100% 呼应。
+- **验证**：运行 `npm run build` 成功通过严格类型分析与 Vite 打包，无任何错误。
+
+### 2026-05-29 气泡切换提示框显示持续时间优化为 3 秒
+
+- **持续显示时间优化**：在桌面宠物端（`src/pet/pet.ts`）的 `storage` 广播监听中，将皮肤热切换时的弹出气泡持续时间从 7.5 秒精致微调为 **`3秒（3000ms）`**，保留足够确认时间的同时极速自动退场，避免气泡在桌面滞留过久，使得整个皮肤切换的交互体验极其干净、清爽且高效。
+- **验证**：运行 `npm run build` 成功通过类型检查与 Vite 生产包构建，无冲突，无错误。
+

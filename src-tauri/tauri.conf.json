@@ -1,11 +1,11 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "VibePet",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "identifier": "com.vibepet.app",
   "build": {
     "frontendDist": "../dist",
-    "devUrl": "http://localhost:5173",
+    "devUrl": "http://localhost:5175",
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build"
   },
