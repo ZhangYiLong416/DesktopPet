@@ -689,18 +689,11 @@ async function updateSpeechBubbleWindowState(show: boolean): Promise<void> {
   const bubble = document.getElementById("pet-speech-bubble");
   if (!bubble) return;
 
-  const scale = getPetSizeScale();
-  const appWindow = getCurrentWindow();
-  const size = getPetPixelSize(scale);
-
-  // 1. 获取屏幕缩放和当前窗口的物理坐标
-  const scaleFactor = await appWindow.scaleFactor();
-  const pos = await appWindow.outerPosition();
-
-  // 2. 算出现在已应用的 padding 和下一个需要的 padding
+  // 1. 算现在已应用的 padding 和下一个需要的 padding
   const currentPaddingStr = document.documentElement.style.getPropertyValue("--pet-window-top-padding");
   const currentPadding = currentPaddingStr ? parseFloat(currentPaddingStr) : PET_WINDOW_TOP_PADDING;
 
+  const scale = getPetSizeScale();
   let actualPadding = PET_WINDOW_TOP_PADDING;
 
   if (show) {
@@ -717,6 +710,18 @@ async function updateSpeechBubbleWindowState(show: boolean): Promise<void> {
     const requiredPadding = Math.round((rawHeight + 12) * bubbleVisualScale + 32);
     actualPadding = Math.max(PET_WINDOW_TOP_PADDING, requiredPadding);
   }
+
+  // 💥 黄金性能 Guard：如果新旧 Padding 没有任何改变，直接无感拦截退出，避开后续所有 Tauri IPC 和重绘动作！
+  // 这能彻底消灭类似“功德模式敲木鱼”等高频单行短提示弹出时的任何 IPC 通信和重排卡顿！
+  if (actualPadding === currentPadding) {
+    return;
+  }
+
+  // 2. 只有在确实需要调整尺寸时，才去获取屏幕缩放和物理坐标
+  const appWindow = getCurrentWindow();
+  const size = getPetPixelSize(scale);
+  const scaleFactor = await appWindow.scaleFactor();
+  const pos = await appWindow.outerPosition();
 
   // 3. 计算物理 Y 轴的微调位移量，以确保桌宠身体在屏幕上的物理坐标绝对静止
   const currentDiffPhysical = Math.round((currentPadding - PET_WINDOW_TOP_PADDING) * scaleFactor);
