@@ -531,7 +531,7 @@ let isAlwaysOnTop = localStorage.getItem("pet-always-on-top") !== "false";
 const LS_PET_SIZE_SCALE = "pet_size_scale";
 const PET_BASE_WIDTH = 192;
 const PET_BASE_HEIGHT = 208;
-const PET_WINDOW_TOP_PADDING = 48;
+const PET_WINDOW_TOP_PADDING = 100;
 const PET_CONTEXT_MENU_SPACE = 174;
 // ── Focus Mode State ──
 let isFocusMode = false;
@@ -689,55 +689,11 @@ async function updateSpeechBubbleWindowState(show: boolean): Promise<void> {
   const bubble = document.getElementById("pet-speech-bubble");
   if (!bubble) return;
 
-  // 1. 算现在已应用的 padding 和下一个需要的 padding
-  const currentPaddingStr = document.documentElement.style.getPropertyValue("--pet-window-top-padding");
-  const currentPadding = currentPaddingStr ? parseFloat(currentPaddingStr) : PET_WINDOW_TOP_PADDING;
-
   const scale = getPetSizeScale();
-  let actualPadding = PET_WINDOW_TOP_PADDING;
-
   if (show) {
     const bubbleScaleFactor = getBubbleScaleFactor(scale);
     document.documentElement.style.setProperty("--bubble-scale-factor", String(bubbleScaleFactor));
-
-    // 给浏览器一帧时间来应用最新的字体缩放和文字渲染，以获得气泡的最新的自适应实际高度
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-
-    const rawHeight = bubble.offsetHeight || 120;
-    const bubbleVisualScale = scale * bubbleScaleFactor;
-
-    // 气泡底部距桌宠身体顶部有 12px 物理偏置，额外留出 32px 安全顶部空隙（含 20px 点击/拉伸动画弹性安全缓冲区）
-    const requiredPadding = Math.round((rawHeight + 12) * bubbleVisualScale + 32);
-    actualPadding = Math.max(PET_WINDOW_TOP_PADDING, requiredPadding);
   }
-
-  // 💥 黄金性能 Guard：如果新旧 Padding 没有任何改变，直接无感拦截退出，避开后续所有 Tauri IPC 和重绘动作！
-  // 这能彻底消灭类似“功德模式敲木鱼”等高频单行短提示弹出时的任何 IPC 通信和重排卡顿！
-  if (actualPadding === currentPadding) {
-    return;
-  }
-
-  // 2. 只有在确实需要调整尺寸时，才去获取屏幕缩放和物理坐标
-  const appWindow = getCurrentWindow();
-  const size = getPetPixelSize(scale);
-  const scaleFactor = await appWindow.scaleFactor();
-  const pos = await appWindow.outerPosition();
-
-  // 3. 计算物理 Y 轴的微调位移量，以确保桌宠身体在屏幕上的物理坐标绝对静止
-  const currentDiffPhysical = Math.round((currentPadding - PET_WINDOW_TOP_PADDING) * scaleFactor);
-  const nextDiffPhysical = Math.round((actualPadding - PET_WINDOW_TOP_PADDING) * scaleFactor);
-  const yAdjustment = nextDiffPhysical - currentDiffPhysical;
-
-  const height = Math.round(actualPadding + Math.max(PET_BASE_HEIGHT, PET_BASE_HEIGHT * scale));
-
-  // 4. 应用 CSS 变量和物理尺寸/坐标调整
-  document.documentElement.style.setProperty("--pet-window-top-padding", `${actualPadding}px`);
-
-  // 先设置绝对坐标，再撑开或回缩尺寸，确保位移完美抵消，毫无跳动感
-  await Promise.all([
-    appWindow.setPosition(new PhysicalPosition(pos.x, pos.y - yAdjustment)),
-    appWindow.setSize(new LogicalSize(size.width, height))
-  ]);
 }
 
 function getPetPixelSize(scale = getPetSizeScale()): { width: number; height: number } {
