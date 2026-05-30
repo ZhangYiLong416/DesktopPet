@@ -677,4 +677,20 @@
 - **ES6 模块化静态资源导入与动态内联注入**：在 `src/config/config.ts` 头部以 ES6 模块化方式引入 8 款 PNG 气泡背景饰品图，让 Vite 在生产编译时百分百自动转换并分发它们正确的 Hash 生产物理路径；在页面首次加载时由 JS 直接动态设置 `.bubble-style-preview` 元素的 `background-image` 行内样式。
 - **验证**：运行 `npm run build` 成功通过严格的编译和 Vite 打包，无任何错误。
 
+---
+
+> [!CAUTION]
+> ### 🚨 【硬性工程规范】关于软件版本号升级与依赖锁完整性的防灾约束（切勿再犯！）
+> 
+> #### 1. 事故复盘与痛点起因
+> 在将版本号从 `0.1.9` 升级至 `0.1.10` 的过程中，由于仅修改了 `package.json` 和 `src-tauri/tauri.conf.json` 里的版本字段，**遗漏了在本地执行 `npm install` 以同步更新 `package-lock.json`**，导致 `package-lock.json` 的版本号残留为 `0.1.9`。
+> 这一遗漏导致 GitHub Actions 的 `Publish Release` 流水线在拉起并执行 `npm ci` 步骤时，触发了 npm 的完整性硬校验拦截（锁版本与配置版本不吻合），造成 Windows、macOS 编译任务在短短 **58 秒内全线崩溃中断**。
+> 
+> #### 2. 后续强制执行铁律（金科玉律）
+> 为了防患于未然，杜绝此类由于粗心导致的 CI/CD 中断事故，制定以下**硬性软件工程提交规范**，未来任何人（包括所有 AI 智能体与人类开发者）在执行版本号升级（Bump Version）时都必须强制遵守：
+> 1. **强制同步运行指令**：一旦在 `package.json` 中修改了 `"version"`，**必须强制在本地根目录下立即执行一次 `npm install`**，以此迫使 npm 自动将最新的版本号刷新写入 `package-lock.json`。
+> 2. **强制一并提交**：升级版本号的 Commit，**必须且只能**一并包含对 `package.json`、`package-lock.json` 以及 `src-tauri/tauri.conf.json` 三方文件的修改，严禁单独遗漏任何一个文件。
+> 3. **前置阻断校验**：未来任何未同步更新 `package-lock.json` 的版本 bump Commit 均被判定为**违规提交**，严禁执行 `git push` 推送，必须在本地完全校准后方可提交！
+
+
 
